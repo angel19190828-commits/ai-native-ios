@@ -20,7 +20,8 @@ const SCHEMA = {
   required: ['eventTitle', 'kind', 'dateTime', 'location', 'arrival', 'preparation']
 };
 
-const MODEL = 'gemini-flash-latest';
+// Kept in sync with api/extract.js — see its comment for why flash-lite, not flash.
+const MODEL = 'gemini-flash-lite-latest';
 
 http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');

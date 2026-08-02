@@ -8,7 +8,10 @@
 //                      e.g. https://angel19190828-commits.github.io
 //                      If unset, falls back to '*' (fine for local `vercel dev`, not for production).
 
-const MODEL = 'gemini-flash-latest';
+// gemini-flash-latest's free-tier daily quota (20 requests/day) is too low for a public demo.
+// gemini-flash-lite-latest has a much higher free-tier daily quota (500 requests/day) and is
+// plenty capable for this structured-extraction task.
+const MODEL = 'gemini-flash-lite-latest';
 
 const SCHEMA = {
   type: 'OBJECT',
