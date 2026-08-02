@@ -50,7 +50,7 @@
 </div>
 
 <!-- 背景 -->
-<div class="cs-section" id="problem">
+<div class="cs-section wide" id="problem">
   <h2>背景</h2>
   <p>iOS 已经提供多种系统级入口:Siri、系统搜索、通知、桌面小组件、实时活动、快捷指令、视觉识别、Apple Intelligence,以及单个 App。用户不再必须每次先找到并打开 App——可以通过语言、搜索、通知、桌面界面或当前屏幕内容查找信息、表达需求并执行部分操作。第三方 App 也可以通过 App Intents 等方式,把内容与操作开放给这些系统入口<a class="cs-cite" href="#ref1">[1]</a>。</p>
   <p class="muted">需要澄清的前提:iOS 是一个操作系统。Siri、搜索、通知和快捷指令不是不同"系统",而是同一个 iOS 中不同的系统级入口、功能和服务。</p>
@@ -229,7 +229,7 @@
 </div>
 
 <!-- 最终设计范围 -->
-<div class="cs-section" id="scope">
+<div class="cs-section wide" id="scope">
   <h2>最终设计范围与核心设计问题</h2>
   <div class="cs-callout"><b>核心设计问题:</b>如何让 iOS 通过 AI 理解面试邀请、连接来源并在后台组织跨应用任务,减少机械搬运又不移除用户理解和记忆任务所需的复核,同时确保进度可见、遗漏可发现、关键操作可确认、结果可修改并可撤销?</div>
   <div class="cs-callout"><b>核心概念 · 后台执行、过程可见、关键节点确认:</b>用户不需要停留在全屏 AI 界面中等待。授权后,系统在后台协调 Mail、Calendar、Maps 与 Reminders;灵动岛显示用户能够理解的任务阶段,只有当信息缺失、出现冲突或重要操作需要批准时才请求用户关注。</div>
@@ -322,7 +322,7 @@
 </div>
 
 <!-- 设计迭代 -->
-<div class="cs-section">
+<div class="cs-section wide">
   <h2>设计迭代</h2>
   <p>从低保真到高保真的主要调整:</p>
   <ul>
@@ -408,7 +408,7 @@ before joining.</pre>
 </div>
 
 <!-- 风险与限制 -->
-<div class="cs-section" id="risks">
+<div class="cs-section wide" id="risks">
   <h2>风险与限制</h2>
   <div class="cs-callout warn"><b>数据真实性:</b>联系人、文件候选、日历冲突均为本项目虚构的模拟数据;邮件解析已接入真实 Gemini API,但不连接任何真实 Apple API,不代表真实产品的数据处理方式。</div>
   <div class="cs-callout warn"><b>范围局限:</b>原型只覆盖"面试邀请邮件"这一个场景为主线,不代表所有跨应用任务都适用同一套交互模式(如涉及支付、多联系人协调的任务需要进一步设计)。</div>
@@ -417,7 +417,7 @@ before joining.</pre>
 </div>
 
 <!-- 下一步验证 -->
-<div class="cs-section">
+<div class="cs-section wide">
   <h2>下一步验证</h2>
   <p>现有流程测试已经完成;以下是针对本项目原型的下一轮验证,当前尚未执行、无伪造结果:</p>
   <ol>
@@ -434,7 +434,7 @@ before joining.</pre>
 </div>
 
 <!-- 参考资料 -->
-<div class="cs-section">
+<div class="cs-section wide">
   <h2>参考资料</h2>
   <ol class="cs-refs">
     <li id="ref1"><b>[1]</b> Apple Inc. "App Intents" & "Adopting App Intents to support system experiences." Apple Developer Documentation. 访问日期 2026-07-29. <a href="https://developer.apple.com/documentation/appintents" target="_blank">developer.apple.com/documentation/appintents</a></li>
