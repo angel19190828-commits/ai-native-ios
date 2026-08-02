@@ -1,0 +1,18 @@
+.env
+.env.local
+.vercel
+node_modules/
+.tools/
+*.bak
+*.bak.html
+
+# Raw usability-test evidence (real participant screen recordings/photos, not for public repo).
+# The safe, redacted subset already lives in prototype/assets/research-evidence/.
+research/user-tests/
+research/user3-analysis/
+research/user4-analysis/
+research/transcribe_user3.py
+research/transcribe_user4.py
+
+# Office lock files
+~$*

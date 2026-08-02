@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>目标任务空间 · 可交互原型</title>
+<link rel="stylesheet" href="css/tokens.css" />
+<link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+
+<div class="workbench">
+
+  <!-- 左侧:演示控制面板(非 iOS 界面的一部分,仅供本原型评审使用) -->
+  <div class="control-panel">
+    <h1>目标任务空间</h1>
+    <p class="subtitle">AI 原生 iOS 概念设计 · 可交互原型<br/>场景:一封面试邀请邮件如何变成可查看、可修改、可执行、可追踪的跨应用任务。</p>
+
+    <div class="control-group">
+      <h2>流程 A · 主干(按顺序点击体验)</h2>
+      <button class="control-btn" data-screen="mail" onclick="jumpMail()"><span class="dot"></span>① 邮件与 AI 建议入口</button>
+      <button class="control-btn" data-screen="info_confirm" onclick="jumpInfoConfirm()"><span class="dot"></span>② 信息确认(含日期不确定 · 流程C)</button>
+      <button class="control-btn" data-screen="plan" onclick="jumpPlan()"><span class="dot"></span>③ 任务计划(可删除/排序)</button>
+      <button class="control-btn" data-screen="batch_confirm" onclick="jumpBatchConfirm()"><span class="dot"></span>④ 批量确认(风险分级)</button>
+    </div>
+
+    <div class="control-group">
+      <h2>分支流程(直接跳转查看)</h2>
+      <button class="control-btn" data-screen="conflict" onclick="jumpConflict()"><span class="dot"></span>流程B · 日程冲突 → 联系 Alex</button>
+      <button class="control-btn" data-screen="failure_recovery" onclick="jumpFailure()"><span class="dot"></span>流程D · 步骤失败恢复</button>
+      <button class="control-btn" data-screen="complete" onclick="jumpComplete()"><span class="dot"></span>流程E · 完成态 + 撤销</button>
+    </div>
+
+    <div class="control-group">
+      <h2>系统级持续状态</h2>
+      <button class="control-btn" data-screen="system_surfaces" onclick="jumpSystemSurfaces()"><span class="dot"></span>锁屏 / 小组件 / 通知 / Siri</button>
+    </div>
+
+    <button class="reset-btn" onclick="resetDemo()">↺ 重置演示</button>
+
+    <div class="state-readout" id="stateReadout"></div>
+
+    <p class="subtitle" style="margin-top:16px;">全部数据为本项目虚构的模拟数据,不连接任何真实 Apple API。<br/>研究与设计过程见 <a href="case-study.html">案例研究页</a>,低保真线框图见 <a href="wireframes.html">线框图页</a>。</p>
+  </div>
+
+  <!-- 右侧:手机舞台 -->
+  <div class="phone-stage">
+    <div class="phone-frame">
+      <div class="phone-screen" id="phoneScreen">
+        <div class="notch"></div>
+        <div class="status-bar">
+          <span>9:41</span>
+          <span class="icons">●●● 5G 🔋</span>
+        </div>
+        <div class="screen-root" id="screenRoot"></div>
+        <div id="overlayRoot"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,85 @@
+/* 低保真线框图专用样式:刻意去色、去装饰,只保留结构与标注。 */
+.wf-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--sp-7) var(--sp-6) var(--sp-8);
+}
+.wf-header { margin-bottom: var(--sp-7); }
+.wf-header h1 { font-size: 26px; margin: 0 0 8px; }
+.wf-header p { color: var(--text-secondary); font-size: 14px; line-height: 1.7; max-width: 760px; }
+.wf-header .backlink { font-size: 13px; }
+
+.wf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--sp-6);
+}
+.wf-card {
+  border: 1px solid #bbb;
+  background: #fff;
+}
+.wf-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 10px 14px;
+  border-bottom: 1px solid #bbb;
+  background: #f0f0f0;
+}
+.wf-card-head .num { font-weight: 700; font-size: 13px; font-family: monospace; }
+.wf-card-head .name { font-size: 13px; font-weight: 600; }
+.wf-flow-tag {
+  font-size: 10px;
+  border: 1px solid #999;
+  padding: 1px 6px;
+  color: #555;
+}
+
+.wf-screen {
+  aspect-ratio: 9 / 17.5;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: repeating-linear-gradient(135deg, #fff, #fff 10px, #fafafa 10px, #fafafa 20px);
+}
+.wf-box {
+  border: 1.5px solid #333;
+  background: #fff;
+  padding: 6px 8px;
+  font-size: 10px;
+  color: #333;
+  line-height: 1.4;
+}
+.wf-box.dashed { border-style: dashed; color: #777; }
+.wf-box.filled { background: #ddd; }
+.wf-box.dark { background: #333; color: #fff; }
+.wf-box.grow { flex: 1; }
+.wf-row { display: flex; gap: 6px; }
+.wf-row > * { flex: 1; }
+.wf-x { font-size: 9px; color: #999; }
+.wf-label { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #999; margin-bottom: -2px; }
+
+.wf-annotation {
+  padding: 12px 14px;
+  border-top: 1px solid #ddd;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.wf-annotation b { color: var(--text-primary); }
+
+.wf-legend {
+  display: flex; gap: 16px; flex-wrap: wrap;
+  font-size: 12px; color: var(--text-secondary);
+  margin: var(--sp-5) 0 var(--sp-6);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-s);
+}
+.wf-legend span { display:flex; align-items:center; gap:6px; }
+.wf-legend i { display:inline-block; width:14px; height:10px; border:1.5px solid #333; }
+.wf-legend i.dashed { border-style: dashed; }
+.wf-legend i.filled { background:#ddd; }
+.wf-legend i.dark { background:#333; }
