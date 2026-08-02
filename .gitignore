@@ -7,10 +7,14 @@ node_modules/
 *.bak.html
 
 # Raw usability-test evidence (real participant screen recordings/photos, not for public repo).
-# The safe, redacted subset already lives in prototype/assets/research-evidence/.
-research/user-tests/
-research/user3-analysis/
-research/user4-analysis/
+# The written *-report.md summaries are checked (verified PII-free), the raw evidence isn't.
+# The safe, redacted screenshot subset already lives in prototype/assets/research-evidence/.
+research/user-tests/user-1-evidence/
+research/user-tests/user-2-evidence/
+research/user3-analysis/*
+!research/user3-analysis/*-report.md
+research/user4-analysis/*
+!research/user4-analysis/*-report.md
 research/transcribe_user3.py
 research/transcribe_user4.py
 

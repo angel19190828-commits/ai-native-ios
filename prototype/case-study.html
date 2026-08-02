@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>AI-Native iOS · Task Planning — Case Study</title>
+<title>目标任务空间 · AI 原生 iOS 概念设计案例研究</title>
 <link rel="stylesheet" href="css/tokens.css" />
 <link rel="stylesheet" href="css/case-study.css" />
 <style>
@@ -23,25 +23,25 @@
 <body>
 
 <div class="cs-topbar">
-  <span class="brand">AI-Native iOS</span>
+  <span class="brand">目标任务空间</span>
   <nav>
-    <a href="#problem">Problem</a>
-    <a href="#ai-integration">AI Integration</a>
-    <a href="#future">Future</a>
+    <a href="#problem">问题</a>
+    <a href="#user-test">用户测试</a>
+    <a href="#ai-integration">AI 集成</a>
     <a href="wireframes.html">低保真线框图</a>
-    <a href="wireframes-high-fidelity.html">Launch Demo →</a>
+    <a href="wireframes-high-fidelity.html">打开原型 →</a>
   </nav>
 </div>
 
 <div class="cs-hero">
-  <div class="eyebrow">Case Study</div>
-  <h1>AI-Native iOS<br/>让 iOS 把你的目标变成可追踪的跨应用计划</h1>
-  <p class="lede">一个交互式概念探索:当 AI 成为 iOS 的系统能力后,它如何理解上下文、跨应用组织任务,同时始终把控制权留给用户。</p>
+  <div class="eyebrow">AI 原生 iOS 概念设计 · 案例研究</div>
+  <h1>目标任务空间<br/>让 iOS 把你的目标变成可追踪的跨应用计划</h1>
+  <p class="lede">当 AI 成为 iOS 的系统基础能力后,系统如何理解用户当前看到的信息和表达的目标,并帮助用户组织、执行和追踪涉及多个应用与多个步骤的任务?本项目从一封面试邀请邮件出发,给出一个具体、可交互的答案。</p>
   <div class="meta-row">
     <div class="meta-item">角色<b>独立完成研究、设计、原型开发与 AI 集成</b></div>
     <div class="meta-item">工具<b>Figma · HTML/CSS/JS · Google Gemini API · Vercel</b></div>
     <div class="meta-item">时间<b>2026 年 7–8 月</b></div>
-    <div class="meta-item">场景<b>从一封面试邀请邮件出发的验证案例</b></div>
+    <div class="meta-item">数据<b>本地模拟数据 + 真实 Gemini 解析,不连接真实 Apple API</b></div>
   </div>
   <div class="cs-cta-row">
     <a class="cs-btn cs-btn-primary" href="wireframes-high-fidelity.html">打开可交互原型 →</a>
@@ -49,9 +49,16 @@
   </div>
 </div>
 
-<!-- Problem -->
-<div class="cs-section wide" id="problem">
-  <h2>Problem</h2>
+<!-- 背景 -->
+<div class="cs-section" id="problem">
+  <h2>背景</h2>
+  <p>iOS 已经提供多种系统级入口:Siri、系统搜索、通知、桌面小组件、实时活动、快捷指令、视觉识别、Apple Intelligence,以及单个 App。用户不再必须每次先找到并打开 App——可以通过语言、搜索、通知、桌面界面或当前屏幕内容查找信息、表达需求并执行部分操作。第三方 App 也可以通过 App Intents 等方式,把内容与操作开放给这些系统入口<a class="cs-cite" href="#ref1">[1]</a>。</p>
+  <p class="muted">需要澄清的前提:iOS 是一个操作系统。Siri、搜索、通知和快捷指令不是不同"系统",而是同一个 iOS 中不同的系统级入口、功能和服务。</p>
+</div>
+
+<!-- 问题 -->
+<div class="cs-section wide">
+  <h2>问题</h2>
   <p>邮件里的一个任务,信息会分散到 Calendar、Maps、Reminders 和用户自己的记忆里。用户需要自己把这些动作重新连接成一个完整目标——找地址、查通勤、设提醒、核对细节,而系统不会替你记住这些步骤之间的关系。</p>
   <div class="cs-stat-row">
     <div class="cs-stat"><div class="num">17</div><div class="lbl">面试邀请场景拆解出的操作步骤</div></div>
@@ -62,9 +69,9 @@
   <p class="muted">数据来源:本项目对面试邀请场景的任务拆解与量化审查,见 <a href="../research/02-task-analysis.md">research/02-task-analysis.md</a>。</p>
 </div>
 
-<!-- Research Insight -->
-<div class="cs-section wide" id="research">
-  <h2>Research Insight</h2>
+<!-- 研究洞察 -->
+<div class="cs-section wide">
+  <h2>研究洞察</h2>
   <p>用户通常可以顺利完成<b>单个 App 内的操作</b>——创建一个日历事件、查一条路线,这些都不难。真正的问题是<b>跨 App 保持任务的连续性</b>:用户会反复打开邮件重新核对信息、依赖自己的记忆判断还剩什么没做、或者需要询问别人来确认通勤时间是否还准确。</p>
   <div class="cs-cards">
     <div class="cs-card"><span class="tag">发现 01</span><h4>用户可以从多个位置开始操作</h4><p>Siri、系统搜索、通知、小组件、快捷指令——iOS 已经不依赖单一 App 入口,但这些入口各自独立。</p></div>
@@ -75,10 +82,222 @@
   <p class="muted">完整研究过程见 <a href="../research/03-findings.md">research/03-findings.md</a>、<a href="../research/04-opportunity-matrix.md">04-opportunity-matrix.md</a>。</p>
 </div>
 
-<!-- Initial Low-Fidelity Concept -->
+<!-- 测试计划 -->
+<div class="cs-section wide" id="user-test">
+  <h2>测试计划</h2>
+  <p>我设计了一项简短的情境式用户测试,观察 iOS 用户如何处理一封线下面试邀请。测试使用参与者自己的设备与日常工具,不展示本项目的设计方案,目的是记录当前真实行为,而不是验证参与者能否按指定步骤操作。</p>
+  <div class="cs-cards">
+    <div class="cs-card"><span class="tag">测试目的</span><h4>找到任务断点</h4><p>观察信息如何从邮件进入日历、地图、提醒或外部记忆,以及完整目标在哪些位置失去连续性。</p></div>
+    <div class="cs-card"><span class="tag">参与者</span><h4>4 位 iOS 用户</h4><p>四场测试均已完成并分析。参与者使用自己的设备与日常工具,按平时方式处理任务。</p></div>
+    <div class="cs-card"><span class="tag">测试方式</span><h4>情境任务 + 屏幕录制</h4><p>主持式远程测试,记录屏幕行为、口头说明、App 与设备切换以及任务完成后的回顾。</p></div>
+  </div>
+  <h3>测试情境</h3>
+  <div class="cs-callout"><b>你收到一封线下面试邀请:</b>面试安排在下周二上午 10:30,地点为 555 Burrard Street;需要提前 15 分钟到达并携带作品集。如需改期,请联系 Alex。请像平时一样做好安排,直到你认为自己已经准备完成。</div>
+  <p class="muted">主持人不会要求参与者使用 Calendar、Maps、Reminders、Siri 或任何特定功能;只有这样才能观察他们自然选择的入口与工具。</p>
+  <h3>六个维度如何被观察</h3>
+  <div class="cs-table-wrap">
+    <table class="cs-table">
+      <tr><th>系统行为维度</th><th>测试中观察什么</th></tr>
+      <tr><td><b>交互方式</b></td><td>用户从邮件、App、Siri、通知、小组件还是其他入口开始</td></tr>
+      <tr><td><b>任务流程</b></td><td>任务经过哪些步骤、App 与设备,在哪里返回、跳转或中断</td></tr>
+      <tr><td><b>系统记忆</b></td><td>用户是否依赖脑内记忆、便利贴或返回邮件保存未完成事项</td></tr>
+      <tr><td><b>决策支持</b></td><td>用户如何判断日程冲突、通勤时间、提前到达与出发时间</td></tr>
+      <tr><td><b>执行方式</b></td><td>哪些操作由系统辅助完成,哪些仍需手动输入、核对与确认</td></tr>
+      <tr><td><b>上下文理解</b></td><td>邮件中的时间、地点和要求能否进入后续工具并保持关联</td></tr>
+    </table>
+  </div>
+</div>
+
+<!-- 真实用户测试结果 -->
 <div class="cs-section wide">
-  <h2>Initial Low-Fidelity Concept</h2>
-  <p>第一版原型验证的是最基本的系统行为顺序:邮件触发 AI 建议 → 信息确认 → 执行授权 → 生成任务计划 → 冲突处理分支 → 完成与撤销。这一版故意保持视觉粗糙,只为检查状态之间的逻辑是否讲得通。</p>
+  <h2>真实用户测试结果</h2>
+  <p class="muted">四位参与者都能熟练操作单个 App。研究关注的不是"会不会使用 Calendar 或 Maps",而是完整目标如何跨 App、设备和外部记忆持续推进。样本规模较小,以下频次只描述本次四场测试。</p>
+  <div class="participant-grid">
+    <article class="participant-card">
+      <div class="participant-top"><span class="participant-id">U1</span><div><b>User 1</b><small>研究生 · iOS 用户</small></div></div>
+      <div class="participant-path">Mail → Reminders / Calendar → 返回邮件 → Maps</div>
+      <ul><li>操作熟练,无明显困惑</li><li>依靠脑内记忆并返回邮件核对</li><li>Siri 只用于简单任务;不愿配置复杂 Shortcuts</li></ul>
+    </article>
+    <article class="participant-card">
+      <div class="participant-top"><span class="participant-id">U2</span><div><b>User 2</b><small>Calendar 用户 · 跨设备流程</small></div></div>
+      <div class="participant-path">电脑邮件 → 手机 Calendar → 电脑邮件 → Maps → 纸质便利贴</div>
+      <ul><li>完成日历后重新核对邮件</li><li>使用 Calendar Widget,但本任务仍直接进入 Calendar</li><li>不熟悉 Shortcuts,也不习惯使用 Siri</li></ul>
+    </article>
+    <article class="participant-card">
+      <div class="participant-top"><span class="participant-id">U3</span><div><b>User 3</b><small>Outlook + Google Calendar · 双设备</small></div></div>
+      <div class="participant-path">电脑 Outlook → 手机 Google Calendar → 返回来源核对</div>
+      <ul><li>手动输入帮助记忆并保持掌控</li><li>复核时发现遗漏"提前 15 分钟"</li><li>担心完全自动化让自己漏掉细节</li></ul>
+    </article>
+    <article class="participant-card">
+      <div class="participant-top"><span class="participant-id">U4</span><div><b>User 4</b><small>Calendar + Google Maps · 多层提醒</small></div></div>
+      <div class="participant-path">Mail → Calendar → Google Maps → 提醒 / Alarm</div>
+      <ul><li>根据约 40 分钟公交时间自行规划</li><li>使用日历提醒与起床保障</li><li>地址留在邮件中,计划当天再查</li></ul>
+    </article>
+  </div>
+  <div class="component-signal">
+    <div><strong>4 / 4</strong><span>从邮件或熟悉 App 开始任务;本次任务中无人使用 Siri 或 Shortcuts</span></div>
+    <div><strong>4 / 4</strong><span>任务信息跨 App、设备、脑内记忆或纸张分散</span></div>
+    <div><strong>3 / 4</strong><span>明确返回邮件或原始来源进行核对</span></div>
+    <div><strong>3 / 4</strong><span>额外处理通勤时间或出发缓冲</span></div>
+  </div>
+  <div class="followup-evidence">
+    <div class="followup-label">测试后补充访谈 · 口述证据</div>
+    <div class="followup-quotes">
+      <blockquote><b>User 1</b><p>"Siri 经常识别错误,我只用它做简单任务。我不会使用提醒 Widget,也不想为能快速手动完成的事情配置复杂 Shortcuts。"</p></blockquote>
+      <blockquote><b>User 2</b><p>"我会使用 Calendar Widget,但不熟悉 Shortcuts,也不习惯使用 Siri。"</p></blockquote>
+    </div>
+    <p class="evidence-note">这说明 Widget 可以承担快速查看,却没有自然承担跨应用任务的启动与组织;问题不是再增加一个入口,而是让任务开始后的连接与进度更完整。</p>
+  </div>
+  <h3>关键帧证据</h3>
+  <p class="muted">案例页保留最能说明行为的关键帧,完整录屏作为研究档案保存。截图用于证明行为路径,口述内容单独标注,避免把"用户说的"当成"屏幕上观察到的"。</p>
+  <div class="evidence-grid">
+    <figure class="evidence-frame"><div class="frame-media"><img src="assets/research-evidence/u1-source-recheck.jpg" alt="User 1 返回来源核对信息的录屏关键帧"></div><figcaption><b>User 1</b><span>返回邮件核对后,将日历时间从 10:00 修正为 10:30。</span></figcaption></figure>
+    <figure class="evidence-frame"><div class="frame-media"><img src="assets/research-evidence/u1-reminders-empty.jpg" alt="User 1 打开 Reminders 发现是空的"></div><figcaption><b>User 1</b><span>打开 Reminders 检查,发现没有任何相关提醒被创建。</span></figcaption></figure>
+    <figure class="evidence-frame"><div class="frame-media"><img src="assets/research-evidence/u2-maps-route.jpg" alt="User 2 使用地图确认通勤的录屏关键帧"></div><figcaption><b>User 2</b><span>完成 Calendar 后切换到 Maps,单独确认通勤时间。</span></figcaption></figure>
+    <figure class="evidence-frame"><div class="frame-media"><img src="assets/research-evidence/u2-calendar-created.jpg" alt="User 2 在 Calendar 里看到已创建的事件"></div><figcaption><b>User 2</b><span>在 Calendar 里确认事件已经创建成功。</span></figcaption></figure>
+    <figure class="evidence-frame landscape"><div class="frame-media"><img src="assets/research-evidence/u3-source-recheck.jpg" alt="User 3 返回电脑来源核对要求的录屏关键帧"></div><figcaption><b>User 3</b><span>完成录入后返回来源复核,发现"提前 15 分钟"尚未处理。</span></figcaption></figure>
+    <figure class="evidence-frame"><div class="frame-media"><img src="assets/research-evidence/u4-maps-route.jpg" alt="User 4 使用地图计算公交时间的录屏关键帧"></div><figcaption><b>User 4</b><span>得到约 40 分钟公交时间后,再决定准备与出发安排。</span></figcaption></figure>
+  </div>
+  <h3>跨案例核心发现</h3>
+  <div class="cs-cards">
+    <div class="cs-card"><span class="tag">发现 01 · 4/4</span><h4>工具可用,目标仍由用户组织</h4><p>用户都能完成单个 App 操作,但需要自己把邮件、日历、路线、提醒和准备要求维持为同一个目标。</p></div>
+    <div class="cs-card"><span class="tag">发现 02 · 3/4</span><h4>原始邮件仍是事实来源</h4><p>用户返回邮件核对,或有意把地址留在邮件中以后再查。复制信息并没有替代来源追踪。</p></div>
+    <div class="cs-card"><span class="tag">发现 03 · 反例</span><h4>手动步骤也可能具有认知价值</h4><p>User 3 明确依赖手动输入来记忆和发现遗漏。痛点不是所有手动操作,而是机械搬运与不可见的遗漏。</p></div>
+    <div class="cs-card"><span class="tag">发现 04 · 3/4</span><h4>通勤是动态决策,不是地址查询</h4><p>用户需要结合交通方式、准备时间、提前到达和个人 buffer;地图来源与出发地也会影响结果。</p></div>
+    <div class="cs-card"><span class="tag">发现 05 · 入口行为</span><h4>系统级入口没有承担任务组织</h4><p>四位参与者都从邮件或熟悉 App 开始;补充访谈显示 Widget 会被用于快速查看,但 Siri 与 Shortcuts 仍因识别可靠性、学习成本和习惯没有进入本任务流程。</p></div>
+    <div class="cs-card"><span class="tag">发现 06 · 完整性</span><h4>"完成"不代表所有要求已处理</h4><p>User 3 在复核时补上提前到达;User 4 的流程无法验证作品集要求是否已转化。系统需要暴露未处理信息。</p></div>
+  </div>
+  <div class="research-conclusion">
+    <span>研究结论</span>
+    <p>最需要改善的是任务开始之后的组织与完整性:AI 应连接来源、预填机械信息、解释动态判断并指出遗漏;用户保留能帮助理解和记忆的复核、冲突处理与最终写入确认。</p>
+  </div>
+  <p class="report-links">详细证据:<a href="../research/user-tests/User-1-Jade-Tan-report.md">用户 1</a> · <a href="../research/user-tests/User-2-Antonia-report-cn.md">用户 2</a> · <a href="../research/user3-analysis/User3-report.md">用户 3</a> · <a href="../research/user4-analysis/User4-report.md">用户 4</a></p>
+</div>
+
+<!-- 我选择解决什么 -->
+<div class="cs-section wide">
+  <h2>我选择解决什么</h2>
+  <p>测试显示,用户已经能够熟练操作单个 App;真正没有被解决的是<b>任务开始之后的组织、来源追踪与完整性</b>。用户需要减少跨 App 的机械搬运,但 User 3 也证明手动复核能帮助记忆和发现遗漏。因此,设计范围不是完全接管任务,而是让 AI 理解邀请、连接日程与通勤、检查未处理信息并生成草案,同时保留用户有意义的复核、判断和最终确认。</p>
+  <div class="cs-cards">
+    <div class="cs-card"><span class="tag">保留给用户</span><h4>判断与外部承诺</h4><p>用户决定是否开始规划、如何处理冲突、是否接受最终计划,并确认邮件发送等重要操作。</p></div>
+    <div class="cs-card"><span class="tag">交给 AI</span><h4>连接、预填与遗漏检查</h4><p>AI 提取邮件要求,连接日历与地图信息,解释通勤依据,生成可编辑计划,并标出尚未转化的来源信息。</p></div>
+    <div class="cs-card"><span class="tag">交给系统</span><h4>可靠执行与任务状态</h4><p>确定性的系统能力创建事件和提醒、更新阶段进度,并提供暂停、重试与撤销。</p></div>
+  </div>
+  <h3>AI 在流程中的适用位置</h3>
+  <div class="cs-table-wrap">
+    <table class="cs-table">
+      <tr><th>流程阶段</th><th>AI 的角色</th><th>责任边界</th></tr>
+      <tr><td>理解面试邀请</td><td><b>AI 处理</b></td><td>提取时间、地点、联系人、提前到达和材料要求,并保留信息来源</td></tr>
+      <tr><td>授权开始规划</td><td>用户决定</td><td>用户明确决定系统是否可以继续处理</td></tr>
+      <tr><td>检查日程冲突</td><td><b>AI 辅助</b></td><td>发现并解释冲突;如何调整仍由用户决定</td></tr>
+      <tr><td>规划通勤</td><td><b>AI 处理</b></td><td>结合面试时间、提前到达、通勤和缓冲时间计算建议出发时间</td></tr>
+      <tr><td>生成计划与回复草稿</td><td><b>AI 处理</b></td><td>生成可编辑草稿,不直接代表用户作出承诺</td></tr>
+      <tr><td>创建事件与提醒</td><td>系统执行</td><td>用户确认后,由确定性的 App 能力写入已批准内容</td></tr>
+      <tr><td>显示阶段进度</td><td>系统状态</td><td>灵动岛显示可验证的任务状态,而不是 AI 的内部思考</td></tr>
+      <tr><td>发送、改期或撤销</td><td>用户确认</td><td>系统可以准备操作,但重要外部影响必须由用户批准</td></tr>
+    </table>
+  </div>
+  <div class="cs-callout"><b>方案一句话总结:</b>一个 AI 原生的 iOS 任务协调体验,将面试邀请邮件转化为跨 Mail、Calendar、Maps 和 Reminders 的可执行、可追踪计划,在后台持续推进任务,同时让进度保持可见,并将重要决定留给用户控制。</div>
+</div>
+
+<!-- 机会方向比较 -->
+<div class="cs-section wide">
+  <h2>机会方向比较</h2>
+  <div class="post-test-change">
+    <span class="study-kicker">测试前判断 → 测试后收敛</span>
+    <h3>用户测试具体改变了什么</h3>
+    <div class="change-grid">
+      <article><b>01 · 入口</b><p><del>再设计一个 AI 入口</del></p><strong>从邮件自然触发</strong><span>Widget 可用于查看,但没有组织本次任务;灵动岛改为承担后台状态和关键提醒。</span></article>
+      <article><b>02 · 自动化</b><p><del>授权后尽量自动完成</del></p><strong>机械搬运自动化,判断保留给用户</strong><span>User 3 证明手动复核能帮助记忆并发现遗漏,因此保留最终确认与冲突处理。</span></article>
+      <article><b>03 · 完整性</b><p><del>创建日历和路线即完成</del></p><strong>逐项核对来源要求</strong><span>提前到达、作品集等要求容易遗漏;计划必须显示已处理与未处理信息。</span></article>
+      <article><b>04 · 通勤决策</b><p><del>提供一个路线结果</del></p><strong>解释出发时间如何算出</strong><span>路线、提前到达、个人缓冲和准备时间共同决定行动建议。</span></article>
+    </div>
+    <p class="score-change"><b>评分随证据变化:</b>决策支持由初步 3.4 提升为 4.3;执行方式由 3.8 提升为 4.1,但方向从"更多自主执行"改为"可控自动化"。交互方式仅由 2.4 调整为 2.7,仍不是主要问题。<a href="../research/09-design-decision-log-cn.md">查看 Design Decision Log</a></p>
+  </div>
+  <p>我继续使用研究开始时定义的六个系统行为维度作为机会方向。评分综合四项标准:<b>研究证据 30%</b>、<b>任务影响 30%</b>、<b>AI 必要性 20%</b>、<b>可行性与用户控制 20%</b>。1 分代表证据或影响较弱,3 分代表部分成立,5 分代表证据明确且直接影响任务。评分是设计团队依据四场探索性测试作出的相对判断,不是用户直接评分。</p>
+  <div class="cs-table-wrap">
+    <table class="cs-table">
+      <tr><th>评价标准</th><th>交互方式</th><th>任务流程</th><th>系统记忆</th><th>决策支持</th><th>执行方式</th><th>上下文理解</th></tr>
+      <tr><td>研究证据(30%)</td><td>3</td><td><b>5</b></td><td><b>5</b></td><td><b>5</b></td><td><b>5</b></td><td><b>5</b></td></tr>
+      <tr><td>任务影响(30%)</td><td>2</td><td><b>5</b></td><td>4</td><td>4</td><td>4</td><td><b>5</b></td></tr>
+      <tr><td>AI 必要性(20%)</td><td>1</td><td>4</td><td>3</td><td>4</td><td>3</td><td><b>5</b></td></tr>
+      <tr><td>可行性与用户控制(20%)</td><td><b>5</b></td><td>4</td><td>3</td><td>4</td><td>4</td><td>3</td></tr>
+      <tr><td><b>加权结果(满分 5)</b></td><td>2.7</td><td><b>4.6</b></td><td>3.9</td><td><b>4.3</b></td><td>4.1</td><td><b>4.6</b></td></tr>
+    </table>
+  </div>
+  <p><b>选择结果:</b>任务流程与上下文理解均为 4.6 / 5。最终设计以"任务流程"为主要用户问题,以"上下文理解"为核心 AI 能力;新增证据将决策支持提高到 4.3,因为四位用户都需要自行处理冲突、路线、提前到达或 buffer。执行方式不追求最高自动化,而是删除机械搬运并保留有意义的复核。完整计算与证据记录见 <a href="../research/08-opportunity-scoring-audit-4-users-cn.md">机会评分审计记录</a>。</p>
+</div>
+
+<!-- 最终设计范围 -->
+<div class="cs-section" id="scope">
+  <h2>最终设计范围与核心设计问题</h2>
+  <div class="cs-callout"><b>核心设计问题:</b>如何让 iOS 通过 AI 理解面试邀请、连接来源并在后台组织跨应用任务,减少机械搬运又不移除用户理解和记忆任务所需的复核,同时确保进度可见、遗漏可发现、关键操作可确认、结果可修改并可撤销?</div>
+  <div class="cs-callout"><b>核心概念 · 后台执行、过程可见、关键节点确认:</b>用户不需要停留在全屏 AI 界面中等待。授权后,系统在后台协调 Mail、Calendar、Maps 与 Reminders;灵动岛显示用户能够理解的任务阶段,只有当信息缺失、出现冲突或重要操作需要批准时才请求用户关注。</div>
+  <h3>范围内</h3>
+  <ul>
+    <li>从一封线下面试邀请邮件开始,识别时间、地点、联系人、提前到达要求和所需材料</li>
+    <li>显示带有信息来源的 AI 摘要,并在规划前获得用户授权</li>
+    <li>检查日历冲突,结合面试时间、提前到达要求、通勤和缓冲计算建议出发时间</li>
+    <li>在后台准备日历事件、准备提醒、出发提醒和邮件回复草稿</li>
+    <li>通过灵动岛显示:理解邀请 → 检查日程 → 规划通勤 → 生成计划 → 等待确认</li>
+    <li>普通进度保持轻量可见;冲突、信息缺失或重要操作才请求用户介入</li>
+    <li>提供完整任务页面,查看来源、整体进度、已完成事项和待处理决定</li>
+    <li>支持编辑、暂停、重试和撤销</li>
+  </ul>
+  <h3>范围外</h3>
+  <ul>
+    <li>覆盖所有类型的跨应用任务;本项目只验证线下面试邀请这一代表性场景</li>
+    <li>重新设计 Mail、Calendar、Maps 或整个 iOS</li>
+    <li>展示 AI 的内部推理、工具调用或实现层处理步骤</li>
+    <li>未经授权持续读取个人信息,或无限期保存全部个人数据</li>
+    <li>未经确认自动发送邮件、改期、付款、购买、取消预约或作出外部承诺</li>
+    <li>为所有第三方 App 开发完整的生产级集成</li>
+  </ul>
+  <p class="muted"><b>交互层级:</b>灵动岛负责轻量状态和"需要用户处理"的关键时刻;展开状态处理当前决定;只有当用户需要检查来源、进行更多修改或管理任务时,才进入完整任务页面。</p>
+</div>
+
+<!-- 信息架构 -->
+<div class="cs-section wide">
+  <h2>信息架构</h2>
+  <p>"目标任务空间"不是新 App,而是系统在识别到"当前信息里有可执行目标"时生成的系统级任务界面。它以<b>任务状态</b>为主轴,而不是以"页面导航"为主轴——锁屏、小组件、完整任务空间看到的是同一个 <code>overallStatus</code> 在不同容器里的呈现。</p>
+  <div class="cs-flow-diagram">邮件 App(触发点)
+ └─ 系统级 AI 建议入口
+      └─ 目标任务空间(核心界面,系统级,非独立 App)
+           ├─ 信息提取与确认
+           ├─ 任务计划(步骤列表)
+           ├─ 批量确认 / 单独确认(高风险)
+           ├─ 冲突处理分支
+           ├─ 执行进度
+           ├─ 失败恢复分支
+           └─ 完成态(含撤销入口)
+                ├─ 持续投影到:锁屏 / 实时活动
+                ├─ 持续投影到:通知
+                ├─ 持续投影到:主屏幕小组件
+                └─ 可被查询:Siri / 系统搜索</div>
+  <p class="muted">完整数据模型与风险分级规则见 <a href="../design/information-architecture.md">design/information-architecture.md</a> 与 <a href="../design/state-model.md">design/state-model.md</a>。</p>
+</div>
+
+<!-- 用户流程 -->
+<div class="cs-section wide">
+  <h2>用户流程</h2>
+  <p>用户授权后可以离开当前界面并继续使用其他 App。AI 在后台完成理解邀请、检查日程、规划通勤和生成计划;系统只在出现冲突、信息缺失或重要操作需要确认时请求用户介入。</p>
+  <figure class="cs-flow-figure">
+    <a href="assets/user-flow.png" target="_blank" aria-label="打开完整尺寸用户流程图">
+      <img src="assets/user-flow.png" alt="AI 原生 iOS 面试准备用户流程:从邮件、用户授权、AI 后台规划,到系统执行、灵动岛进度、用户确认与完成状态">
+    </a>
+    <figcaption>黄色:AI 理解、连接与建议 · 蓝色:用户授权与确认 · 粉色:需要用户处理 · 青绿色:系统执行与持续跟进</figcaption>
+  </figure>
+</div>
+
+<!-- 低保真原型 -->
+<div class="cs-section wide">
+  <h2>低保真原型:先验证授权,再比较自主程度</h2>
+  <p>我保留两个独立版本,避免为了方便演示而混淆产品行为。Approval-first 版让每个 AI 阶段停留并等待批准,用于逐屏 annotation 与控制感评审;对照版在首次授权后自动推进低风险步骤,只在冲突和最终写入时请求用户介入。</p>
+  <div class="cs-cards">
+    <div class="cs-card"><span class="tag">版本 A · 先评审</span><h4>Approval-first AI</h4><p>Calendar、Maps 与 Reminders 每一步都停留,说明将做什么并等待批准。没有自动跳转、冲突超时或自动收起,适合逐屏标注与 refinement。</p></div>
+    <div class="cs-card"><span class="tag">版本 B · 对照</span><h4>Delegated AI</h4><p>用户批准整体规划后,AI 自动完成低风险步骤;灵动岛持续报告状态,只有信息缺失、日程冲突或正式写入时才暂停。</p></div>
+    <div class="cs-card"><span class="tag">比较问题</span><h4>控制感与流程负担</h4><p>下一轮验证用户在哪些节点需要逐步批准,哪些节点只需要可见和可撤销,避免把"更多确认"直接等同于"更多控制"。</p></div>
+  </div>
   <div class="slide-grid">
     <img src="assets/v1-slides/v1-01-mail.png" alt="低保真:邮件触发">
     <img src="assets/v1-slides/v1-02-suggest.png" alt="低保真:AI 建议">
@@ -87,11 +306,12 @@
     <img src="assets/v1-slides/v1-07-plan.png" alt="低保真:任务计划">
     <img src="assets/v1-slides/v1-09-complete.png" alt="低保真:完成态">
   </div>
+  <div class="cs-cta-row"><a class="cs-btn" href="wireframes-approval.html">看 Approval-first 版 →</a></div>
 </div>
 
-<!-- Problems Found -->
+<!-- 发现的问题 -->
 <div class="cs-section wide">
-  <h2>Problems Found</h2>
+  <h2>低保真阶段发现的问题</h2>
   <div class="cs-cards">
     <div class="cs-card"><h4>确认步骤过多</h4><p>几乎每个动作都要单独弹出一次确认,用户很快会开始机械点击,而不是真的在判断。</p></div>
     <div class="cs-card"><h4>信息密度过高</h4><p>一个屏幕里塞进过多字段和说明文字,真正需要用户看的重点被淹没。</p></div>
@@ -101,9 +321,20 @@
   </div>
 </div>
 
-<!-- High-Fidelity Iteration -->
+<!-- 设计迭代 -->
+<div class="cs-section">
+  <h2>设计迭代</h2>
+  <p>从低保真到高保真的主要调整:</p>
+  <ul>
+    <li>批量确认页最初把"低风险"也放进可勾选列表,后改为"直接展示、不可取消",避免用户误以为低风险操作需要额外操作才会执行。</li>
+    <li>信息确认页最初为每个不确定字段单独弹窗,后改为原地展开的选项条,减少中断感,与"目标优先"原则一致。</li>
+    <li>失败恢复最初只提供"重试/取消"二选一,补充为四个选项(重新搜索/手动选择/稍后提醒/跳过)以覆盖不同的用户意愿强度。</li>
+  </ul>
+</div>
+
+<!-- 高保真迭代 -->
 <div class="cs-section wide">
-  <h2>High-Fidelity Iteration</h2>
+  <h2>高保真迭代</h2>
   <div class="iter-list">
     <div class="iter-item"><b>更少打断</b><span>AI 收进灵动岛,只有需要用户判断时才展开面板。</span></div>
     <div class="iter-item"><b>更少跳转</b><span>同一任务在原面板中继续,不再每一步重新打开界面。</span></div>
@@ -114,9 +345,9 @@
   </div>
 </div>
 
-<!-- AI Integration -->
+<!-- AI 集成 -->
 <div class="cs-section wide" id="ai-integration">
-  <h2>AI Integration</h2>
+  <h2>AI 集成</h2>
   <p>真实调用 Google <b>Gemini</b>(<code>gemini-flash-lite-latest</code>),用结构化输出(<code>responseSchema</code>)理解任意粘贴进来的邀请/通知文本。</p>
   <div class="ai-io">
     <div>
@@ -142,37 +373,23 @@ before joining.</pre>
   <div class="cs-callout"><b>设计边界:</b>Gemini 只负责理解和分类输入文本,判断这是 appointment(到场活动)、meeting(线上会议)还是 deadline(截止日期)。分类结果之后的所有状态流转、冲突判断、执行动作,都由前端的确定性状态机控制,AI 不直接执行任何操作,也不会在信息缺失时编造内容。</div>
 </div>
 
-<!-- Final Prototype -->
+<!-- 最终原型 -->
 <div class="cs-section wide" id="prototype">
-  <h2>Final Prototype</h2>
-  <p>灵动岛承载后台进度,AI 提出的日历/通勤/提醒建议由用户逐项决定,冲突出现时暂停并给出三种处理方式,所有已执行操作都可以撤销。</p>
+  <h2>高保真界面 & 可交互原型</h2>
+  <p>视觉方向:浅色背景、深灰正文、蓝色表示主要操作与系统状态、橙色表示需注意、红色仅用于失败/高风险、绿色表示确认完成。灵动岛承载后台进度,AI 提出的日历/通勤/提醒建议由用户逐项决定,冲突出现时暂停并给出三种处理方式,所有已执行操作都可以撤销。</p>
   <div class="cs-cta-row">
-    <a class="cs-btn cs-btn-primary" href="wireframes-high-fidelity.html">Launch Interactive Demo →</a>
-    <a class="cs-btn cs-btn-secondary" href="assets/video/demo-walkthrough.mp4">Watch Demo Video</a>
-    <a class="cs-btn cs-btn-secondary" href="https://github.com/angel19190828-commits/ai-native-ios" target="_blank">GitHub Repository →</a>
+    <a class="cs-btn cs-btn-primary" href="wireframes-high-fidelity.html">在新标签页打开原型 →</a>
+    <a class="cs-btn cs-btn-secondary" href="assets/video/demo-walkthrough.mp4">观看演示视频</a>
+    <a class="cs-btn cs-btn-secondary" href="https://github.com/angel19190828-commits/ai-native-ios" target="_blank">GitHub 仓库 →</a>
   </div>
   <div class="cs-embed-frame">
-    <iframe src="wireframes-high-fidelity.html" title="AI-Native iOS 可交互原型" loading="lazy"></iframe>
+    <iframe src="wireframes-high-fidelity.html" title="目标任务空间可交互原型" loading="lazy"></iframe>
   </div>
 </div>
 
-<!-- Usability evidence -->
+<!-- 未来方向 -->
 <div class="cs-section wide">
-  <h2>Usability Signals</h2>
-  <p>早期可用性测试中观察到的行为片段(已对参与者信息脱敏)。</p>
-  <div class="evidence-grid">
-    <figure class="evidence-frame"><div class="frame-media"><img src="assets/research-evidence/u1-source-recheck.jpg" alt="User 1 返回来源核对信息的录屏关键帧"></div><figcaption><b>User 1</b><span>返回邮件核对后,将日历时间修正为正确值。</span></figcaption></figure>
-    <figure class="evidence-frame"><div class="frame-media"><img src="assets/research-evidence/u1-reminders-empty.jpg" alt="User 1 打开 Reminders 发现是空的"></div><figcaption><b>User 1</b><span>打开 Reminders 检查,发现没有任何相关提醒被创建。</span></figcaption></figure>
-    <figure class="evidence-frame"><div class="frame-media"><img src="assets/research-evidence/u2-maps-route.jpg" alt="User 2 使用地图确认通勤的录屏关键帧"></div><figcaption><b>User 2</b><span>完成 Calendar 后切换到 Maps,单独确认通勤时间。</span></figcaption></figure>
-    <figure class="evidence-frame"><div class="frame-media"><img src="assets/research-evidence/u2-calendar-created.jpg" alt="User 2 在 Calendar 里看到已创建的事件"></div><figcaption><b>User 2</b><span>在 Calendar 里确认事件已经创建成功。</span></figcaption></figure>
-    <figure class="evidence-frame landscape"><div class="frame-media"><img src="assets/research-evidence/u3-source-recheck.jpg" alt="User 3 返回电脑来源核对要求的录屏关键帧"></div><figcaption><b>User 3</b><span>完成录入后返回来源复核,发现一项要求尚未处理。</span></figcaption></figure>
-    <figure class="evidence-frame"><div class="frame-media"><img src="assets/research-evidence/u4-maps-route.jpg" alt="User 4 使用地图计算公交时间的录屏关键帧"></div><figcaption><b>User 4</b><span>得到通勤时间后,再决定准备与出发安排。</span></figcaption></figure>
-  </div>
-</div>
-
-<!-- Future Opportunities -->
-<div class="cs-section wide" id="future">
-  <h2>Future Opportunities</h2>
+  <h2>未来方向</h2>
   <p>Email 目前只是验证场景,不是产品唯一入口。核心扩展方向是从"理解一封邮件"发展为"从多个系统来源理解用户目标":</p>
   <div class="cs-cards">
     <div class="cs-card"><h4>Messages</h4><p>识别朋友约的饭局、家人提到的截止日期。</p></div>
@@ -184,10 +401,48 @@ before joining.</pre>
   </div>
 </div>
 
-<!-- Reflection -->
+<!-- 反思 -->
 <div class="cs-section wide">
-  <h2>Reflection</h2>
+  <h2>反思</h2>
   <p>AI 加快了理解和分类信息的速度,但产品质量仍然取决于设计边界、用户控制权和确定性的执行逻辑——这些不是 AI 能替代的部分。这个原型验证的是 <b>AI 如何融入系统</b>,而不是 <b>AI 如何替用户接管系统</b>。</p>
+</div>
+
+<!-- 风险与限制 -->
+<div class="cs-section" id="risks">
+  <h2>风险与限制</h2>
+  <div class="cs-callout warn"><b>数据真实性:</b>联系人、文件候选、日历冲突均为本项目虚构的模拟数据;邮件解析已接入真实 Gemini API,但不连接任何真实 Apple API,不代表真实产品的数据处理方式。</div>
+  <div class="cs-callout warn"><b>范围局限:</b>原型只覆盖"面试邀请邮件"这一个场景为主线,不代表所有跨应用任务都适用同一套交互模式(如涉及支付、多联系人协调的任务需要进一步设计)。</div>
+  <div class="cs-callout danger"><b>证据边界:</b>当前完成 4 场探索性情境测试,足以发现行为模式与反例,但不足以推断总体比例。测试研究的是现有流程,尚未验证用户能否理解、信任并正确操作本项目原型。</div>
+  <div class="cs-callout"><b>交互简化:</b>原型中"任务计划"页仅支持删除与重排步骤,未实现自由添加新步骤(增加通过"撤销删除"覆盖);系统级持续状态展示为静态对比面板,而非四套独立可操作界面。</div>
+</div>
+
+<!-- 下一步验证 -->
+<div class="cs-section">
+  <h2>下一步验证</h2>
+  <p>现有流程测试已经完成;以下是针对本项目原型的下一轮验证,当前尚未执行、无伪造结果:</p>
+  <ol>
+    <li>用户是否理解系统生成的任务计划</li>
+    <li>用户是否能发现 AI 提取错误</li>
+    <li>用户是否知道哪些操作已经执行</li>
+    <li>用户是否能区分建议、草稿和已完成操作</li>
+    <li>用户是否信任批量确认</li>
+    <li>用户是否能够处理冲突 / 恢复失败步骤 / 撤销操作</li>
+    <li>用户是否认为该系统比手动切换 App 更简单</li>
+    <li>用户是否觉得系统过于主动</li>
+  </ol>
+  <p class="muted">建议指标:任务完成率、完成时间、操作次数、页面切换次数、错误发现率、错误恢复率、控制感评分、可信度评分。完整测试任务设计见 <a href="../design/validation-plan.md">design/validation-plan.md</a>。</p>
+</div>
+
+<!-- 参考资料 -->
+<div class="cs-section">
+  <h2>参考资料</h2>
+  <ol class="cs-refs">
+    <li id="ref1"><b>[1]</b> Apple Inc. "App Intents" & "Adopting App Intents to support system experiences." Apple Developer Documentation. 访问日期 2026-07-29. <a href="https://developer.apple.com/documentation/appintents" target="_blank">developer.apple.com/documentation/appintents</a></li>
+    <li id="ref2"><b>[2]</b> Apple Inc. "Shortcuts at a glance" / "Intro to Shortcuts." Apple Support. 访问日期 2026-07-29. <a href="https://support.apple.com/guide/shortcuts/shortcuts-at-a-glance-apdf22b0444c/ios" target="_blank">support.apple.com/guide/shortcuts</a></li>
+    <li id="ref3"><b>[3]</b> Apple Inc. "Explore Live Activities and the Dynamic Island." Apple Developer. 访问日期 2026-07-29. <a href="https://developer.apple.com/news/?id=bkm73839" target="_blank">developer.apple.com/news</a></li>
+    <li id="ref4"><b>[4]</b> Apple Inc. "Apple introduces Siri AI, a profoundly more capable and personal assistant." Apple Newsroom, 2026-06. <a href="https://www.apple.com/newsroom/2026/06/apple-introduces-siri-ai-a-profoundly-more-capable-and-personal-assistant/" target="_blank">apple.com/newsroom</a></li>
+  </ol>
+  <p class="muted">本项目自行产生的分析(七类入口分类、17 步任务审查、机会矩阵打分)不属于苹果官方数据,完整证据分级说明见 <a href="../research/06-references.md">research/06-references.md</a>。</p>
 </div>
 
 <div class="cs-footer">
