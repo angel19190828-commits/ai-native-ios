@@ -49,6 +49,7 @@ export const calendarCreateEventAdapter: CapabilityAdapter = {
     title: 'Create calendar event',
     risk: 'write',
     executor: 'device',
+    interactionMode: 'structured',
     confirmation: 'once_per_plan',
     scopes: ['calendar.write'],
   },

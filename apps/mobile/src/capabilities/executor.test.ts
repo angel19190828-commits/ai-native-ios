@@ -22,7 +22,7 @@ const executingTask = () => {
 };
 
 const adapter = (id: string, risk: CapabilityAdapter['descriptor']['risk']): CapabilityAdapter => ({
-  descriptor: { id, title: id, risk, executor: 'device', confirmation: 'once_per_plan', scopes: [] },
+  descriptor: { id, title: id, risk, executor: 'device', interactionMode: 'structured', confirmation: 'once_per_plan', scopes: [] },
   execute: async (_input, context) => ({ summary: `${id} ok`, externalId: context.idempotencyKey }),
 });
 
@@ -68,6 +68,7 @@ test('adapter errors become typed failures instead of false completion', async (
       title: 'Calendar',
       risk: 'write',
       executor: 'device',
+      interactionMode: 'structured',
       confirmation: 'once_per_plan',
       scopes: [],
     },
@@ -119,7 +120,7 @@ test('registry rejects duplicate IDs and descriptor risk drift', async () => {
 
 test('executor rejects capability policy drift from the confirmed plan', async () => {
   const task = executingTask();
-  task.steps[0].policy = { executor: 'device', confirmation: 'once_per_plan', scopes: ['calendar.write'] };
+  task.steps[0].policy = { executor: 'device', interactionMode: 'structured', confirmation: 'once_per_plan', scopes: ['calendar.write'] };
   const drifted = adapter('system.calendar.createEvent', 'write');
   drifted.descriptor.scopes = ['calendar.read'];
   await assert.rejects(
@@ -136,4 +137,48 @@ test('executor fails closed when a capability requires unimplemented per-attempt
     () => executeNextStep(task, new CapabilityRegistry([highFriction]), { userId: 'user-1', deviceId: 'device-1' }),
     /per-attempt confirmation/,
   );
+});
+
+test('executor keeps the UI automation extension point fail-closed', async () => {
+  const task = executingTask();
+  task.steps[0].policy = { executor: 'device', interactionMode: 'ui_automation', confirmation: 'always', scopes: ['screen.interact'] };
+  const fallback = adapter('system.calendar.createEvent', 'write');
+  fallback.descriptor.interactionMode = 'ui_automation';
+  fallback.descriptor.confirmation = 'always';
+  fallback.descriptor.scopes = ['screen.interact'];
+  await assert.rejects(
+    () => executeNextStep(task, new CapabilityRegistry([fallback]), { userId: 'user-1', deviceId: 'device-1' }),
+    /UI automation capability execution is not enabled/,
+  );
+});
+
+test('executor resolves confirmed inputs from dependency receipts', async () => {
+  const task = executingTask();
+  task.steps[0].status = 'completed';
+  task.steps[0].receipt = {
+    attemptId: 'calendar-attempt', idempotencyKey: 'calendar-key', completedAt: at,
+    summary: 'calendar created', output: { destination: 'Miku Vancouver' },
+  };
+  task.steps[1].bindings = [{ targetKey: 'destination', fromStepId: 'calendar', outputKey: 'destination', required: true }];
+  delete task.steps[1].input.destination;
+  let observed: Record<string, unknown> | undefined;
+  const route = adapter('maps.route.estimate', 'read');
+  route.execute = async (input) => { observed = input; return { summary: 'route ready' }; };
+
+  const outcome = await executeNextStep(task, new CapabilityRegistry([route]), { userId: 'user-1', deviceId: 'device-1' });
+  assert.ok(outcome);
+  assert.equal(observed?.destination, 'Miku Vancouver');
+});
+
+test('executor fails closed when a required receipt output is absent', async () => {
+  const task = executingTask();
+  task.steps[0].status = 'completed';
+  task.steps[0].receipt = { attemptId: 'a', idempotencyKey: 'k', completedAt: at, summary: 'done', output: {} };
+  task.steps[1].bindings = [{ targetKey: 'destination', fromStepId: 'calendar', outputKey: 'destination', required: true }];
+  const outcome = await executeNextStep(task, new CapabilityRegistry([adapter('maps.route.estimate', 'read')]), {
+    userId: 'user-1', deviceId: 'device-1', now: () => at,
+  });
+  assert.equal(outcome?.error?.code, 'terminal');
+  assert.match(outcome?.error?.message ?? '', /Required capability output is missing/);
+  assert.deepEqual(outcome?.events.map((event) => event.type), ['step.running', 'step.failed']);
 });

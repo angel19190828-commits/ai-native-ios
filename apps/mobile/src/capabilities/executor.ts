@@ -31,6 +31,23 @@ const asCapabilityError = (error: unknown) => {
   );
 };
 
+export const resolveStepInput = (step: Task['steps'][number], task: Task) => {
+  const resolved = { ...step.input };
+  for (const binding of step.bindings ?? []) {
+    if (!step.dependsOn.includes(binding.fromStepId)) {
+      throw new Error(`Binding source is not a dependency: ${binding.fromStepId}`);
+    }
+    const source = task.steps.find((candidate) => candidate.id === binding.fromStepId)?.receipt?.output;
+    const value = source?.[binding.outputKey];
+    if (value === undefined) {
+      if (binding.required) throw new Error(`Required capability output is missing: ${binding.fromStepId}.${binding.outputKey}`);
+      continue;
+    }
+    resolved[binding.targetKey] = value;
+  }
+  return resolved;
+};
+
 export async function executeNextStep(
   task: Task,
   registry: CapabilityRegistry,
@@ -56,10 +73,14 @@ export async function executeNextStep(
     const descriptorScopes = [...adapter.descriptor.scopes].sort();
     const planScopes = [...step.policy.scopes].sort();
     if (adapter.descriptor.executor !== step.policy.executor
+      || adapter.descriptor.interactionMode !== step.policy.interactionMode
       || adapter.descriptor.confirmation !== step.policy.confirmation
       || JSON.stringify(descriptorScopes) !== JSON.stringify(planScopes)) {
       throw new Error(`Capability policy mismatch: ${step.capabilityId}`);
     }
+  }
+  if (adapter.descriptor.interactionMode === 'ui_automation') {
+    throw new Error(`UI automation capability execution is not enabled: ${step.capabilityId}`);
   }
   if (adapter.descriptor.confirmation === 'always') {
     throw new Error(`Capability requires per-attempt confirmation: ${step.capabilityId}`);
@@ -84,7 +105,7 @@ export async function executeNextStep(
     await options.onEvent?.(running);
     let result;
     try {
-      result = await adapter.execute(step.input, {
+      result = await adapter.execute(resolveStepInput(step, task), {
         userId: options.userId,
         deviceId: options.deviceId,
         taskId: task.id,

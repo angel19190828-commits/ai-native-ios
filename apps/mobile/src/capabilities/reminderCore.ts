@@ -18,7 +18,7 @@ export const createReminderAdapter = (
   now: () => number = Date.now,
   highImportance = 4,
 ): CapabilityAdapter => ({
-  descriptor: { id: 'system.reminder.schedule', title: 'Schedule preparation reminders', risk: 'write', executor: 'device', confirmation: 'once_per_plan', scopes: ['notifications.schedule'] },
+  descriptor: { id: 'system.reminder.schedule', title: 'Schedule preparation reminders', risk: 'write', executor: 'device', interactionMode: 'structured', confirmation: 'once_per_plan', scopes: ['notifications.schedule'] },
   async execute(input, context) {
     const commuteDeparture = Object.values(context.dependencyReceipts)
       .map((receipt) => receipt.output?.departureAt)

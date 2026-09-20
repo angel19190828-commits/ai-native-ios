@@ -18,7 +18,16 @@ The differentiation is not “a chatbot that can do more.” It is an execution 
 
 The product is a general-purpose, intent-driven orchestration layer. A user may start with a direct goal or context shared from an email, message, webpage, commerce surface, travel confirmation, or another app. The reusable system owns planning, missing-information decisions, confirmation, dependency-aware execution, receipts, and ongoing task state. A scenario is an adapter and reference implementation, not a new hard-coded state machine.
 
-The orchestrator operates on registered capability IDs and typed plans. It must not contain branches for “interview,” “dinner,” “travel,” or any future scenario. Platform limits still apply: a capability can act only through a supported API, intent, deep link, share contract, or project-owned connector.
+The orchestrator operates on registered capability IDs and typed plans. It must not contain branches for “interview,” “dinner,” “travel,” or any future scenario. A capability describes a governed outcome contract, not a promise that the target app exposes an API.
+
+The long-term execution strategy is layered:
+
+1. Prefer structured and verifiable execution through system APIs, App Intents, third-party APIs, native adapters, connectors, deep links, and share contracts.
+2. When a target app exposes no sufficient structured surface, a separately reviewed UI-automation adapter may eventually act as a constrained fallback.
+3. Execution mode is part of the confirmed policy. Structured capabilities may earn lower-friction automation only when the action is low-risk, reversible, and receipt-verifiable. UI automation requires stronger preview, per-attempt confirmation, observed-result verification, and recovery.
+4. Purchases, payments, messages/posts, deletion, booking changes, and other high-impact actions always require explicit approval, regardless of execution mode.
+
+The objective is maximum useful completion inside clear permission and risk boundaries—not unrestricted device control.
 
 ## First reference scenario and release gate
 
@@ -99,8 +108,8 @@ Every task must preserve:
 
 ## Explicit non-goals for the first internal build
 
-- Arbitrary control of apps that expose no supported API, intent, deep link, or share contract.
+- UI automation or screen interaction for apps without structured integration. The architecture reserves a governed fallback mode, but the first build does not execute it.
 - Autonomous background execution of high-impact actions without confirmation.
 - A public plugin marketplace.
-- General computer-use automation or accessibility-based screen control.
+- General, unrestricted computer-use automation or accessibility-based screen control.
 - Claiming Apple Intelligence integration where the OS or an app has not exposed the required schema/capability.

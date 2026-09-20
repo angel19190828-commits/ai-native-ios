@@ -11,7 +11,8 @@ function string(value, label, { optional = false, max = 500 } = {}) {
   return value.trim();
 }
 
-function iso(value, label) {
+function iso(value, label, { optional = false } = {}) {
+  if (optional && value === undefined) return undefined;
   const result = string(value, label, { max: 64 });
   if (!ISO_DATE.test(result) || Number.isNaN(Date.parse(result))) throw new Error(`${label} must be ISO 8601`);
   return result;
@@ -24,20 +25,22 @@ function rejectUnknown(input, allowed, label) {
 
 const CAPABILITY_CATALOG = {
   'system.calendar.createEvent': {
+    inputKeys: ['title', 'startDate', 'endDate', 'location', 'notes', 'timeZone'],
     descriptor: {
       id: 'system.calendar.createEvent', title: 'Create calendar event', risk: 'write',
-      executor: 'device', confirmation: 'once_per_plan', scopes: ['calendar.write'],
+      executor: 'device', interactionMode: 'structured', confirmation: 'once_per_plan', scopes: ['calendar.write'],
       description: 'Create one calendar event after confirmation.',
       inputDescription: '{ title, startDate ISO, endDate ISO, optional location, notes, timeZone }',
     },
-    validate(raw) {
+    validate(raw, deferred = new Set()) {
       const input = object(raw, 'calendar input');
       rejectUnknown(input, ['title', 'startDate', 'endDate', 'location', 'notes', 'timeZone'], 'calendar input');
-      const startDate = iso(input.startDate, 'startDate');
-      const endDate = iso(input.endDate, 'endDate');
-      if (Date.parse(endDate) <= Date.parse(startDate)) throw new Error('endDate must follow startDate');
+      const startDate = iso(input.startDate, 'startDate', { optional: deferred.has('startDate') });
+      const endDate = iso(input.endDate, 'endDate', { optional: deferred.has('endDate') });
+      if (startDate && endDate && Date.parse(endDate) <= Date.parse(startDate)) throw new Error('endDate must follow startDate');
       return {
-        title: string(input.title, 'title', { max: 160 }), startDate, endDate,
+        ...(deferred.has('title') && input.title === undefined ? {} : { title: string(input.title, 'title', { max: 160 }) }),
+        ...(startDate === undefined ? {} : { startDate }), ...(endDate === undefined ? {} : { endDate }),
         ...(input.location === undefined ? {} : { location: string(input.location, 'location', { max: 500 }) }),
         ...(input.notes === undefined ? {} : { notes: string(input.notes, 'notes', { max: 2000 }) }),
         ...(input.timeZone === undefined ? {} : { timeZone: string(input.timeZone, 'timeZone', { max: 80 }) }),
@@ -45,41 +48,47 @@ const CAPABILITY_CATALOG = {
     },
   },
   'maps.route.estimate': {
+    inputKeys: ['origin', 'destination', 'arriveBy', 'arrivalMinutesEarly'],
     descriptor: {
       id: 'maps.route.estimate', title: 'Estimate transit route', risk: 'read',
-      executor: 'server', confirmation: 'once_per_plan', scopes: ['location.route'],
+      executor: 'server', interactionMode: 'structured', confirmation: 'once_per_plan', scopes: ['location.route'],
       description: 'Estimate a transit route for an explicit origin, destination, and arrival time.',
       inputDescription: '{ origin, destination, arriveBy ISO, optional arrivalMinutesEarly 0..180 }',
     },
-    validate(raw) {
+    validate(raw, deferred = new Set()) {
       const input = object(raw, 'route input');
       rejectUnknown(input, ['origin', 'destination', 'arriveBy', 'arrivalMinutesEarly'], 'route input');
       const early = input.arrivalMinutesEarly === undefined ? 0 : input.arrivalMinutesEarly;
       if (!Number.isInteger(early) || early < 0 || early > 180) throw new Error('arrivalMinutesEarly is invalid');
       return {
-        origin: string(input.origin, 'origin', { max: 500 }),
-        destination: string(input.destination, 'destination', { max: 500 }),
-        arriveBy: iso(input.arriveBy, 'arriveBy'),
+        ...(deferred.has('origin') && input.origin === undefined ? {} : { origin: string(input.origin, 'origin', { max: 500 }) }),
+        ...(deferred.has('destination') && input.destination === undefined ? {} : { destination: string(input.destination, 'destination', { max: 500 }) }),
+        ...(deferred.has('arriveBy') && input.arriveBy === undefined ? {} : { arriveBy: iso(input.arriveBy, 'arriveBy') }),
         arrivalMinutesEarly: early,
       };
     },
   },
   'system.reminder.schedule': {
+    inputKeys: ['eventStartsAt', 'preparation', 'preparationMinutesBeforeDeparture'],
     descriptor: {
       id: 'system.reminder.schedule', title: 'Schedule preparation reminders', risk: 'write',
-      executor: 'device', confirmation: 'once_per_plan', scopes: ['notifications.schedule'],
+      executor: 'device', interactionMode: 'structured', confirmation: 'once_per_plan', scopes: ['notifications.schedule'],
       description: 'Schedule preparation and departure notifications after any route dependency.',
       inputDescription: '{ eventStartsAt ISO, preparation string[], optional preparationMinutesBeforeDeparture 1..1440 }',
     },
-    validate(raw) {
+    validate(raw, deferred = new Set()) {
       const input = object(raw, 'reminder input');
       rejectUnknown(input, ['eventStartsAt', 'preparation', 'preparationMinutesBeforeDeparture'], 'reminder input');
-      if (!Array.isArray(input.preparation) || input.preparation.length > 20 || input.preparation.some((item) => typeof item !== 'string' || item.length > 300)) {
+      if (!(deferred.has('preparation') && input.preparation === undefined)
+        && (!Array.isArray(input.preparation) || input.preparation.length > 20 || input.preparation.some((item) => typeof item !== 'string' || item.length > 300))) {
         throw new Error('preparation is invalid');
       }
       const lead = input.preparationMinutesBeforeDeparture === undefined ? 30 : input.preparationMinutesBeforeDeparture;
       if (!Number.isInteger(lead) || lead < 1 || lead > 1440) throw new Error('preparationMinutesBeforeDeparture is invalid');
-      return { eventStartsAt: iso(input.eventStartsAt, 'eventStartsAt'), preparation: input.preparation, preparationMinutesBeforeDeparture: lead };
+      return {
+        ...(deferred.has('eventStartsAt') && input.eventStartsAt === undefined ? {} : { eventStartsAt: iso(input.eventStartsAt, 'eventStartsAt') }),
+        ...(input.preparation === undefined ? {} : { preparation: input.preparation }), preparationMinutesBeforeDeparture: lead,
+      };
     },
   },
 };
@@ -88,10 +97,11 @@ function publicCapabilityCatalog() {
   return Object.values(CAPABILITY_CATALOG).map(({ descriptor }) => descriptor);
 }
 
-function validateCapabilityInput(capabilityId, input) {
+function validateCapabilityInput(capabilityId, input, { deferredKeys = [] } = {}) {
   const capability = CAPABILITY_CATALOG[capabilityId];
   if (!capability) throw new Error(`Capability is not registered: ${capabilityId}`);
-  return { descriptor: capability.descriptor, input: capability.validate(input) };
+  for (const key of deferredKeys) if (!capability.inputKeys.includes(key)) throw new Error(`Capability input does not support binding target: ${key}`);
+  return { descriptor: capability.descriptor, input: capability.validate(input, new Set(deferredKeys)) };
 }
 
 module.exports = { CAPABILITY_CATALOG, publicCapabilityCatalog, validateCapabilityInput };

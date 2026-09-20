@@ -44,6 +44,8 @@ GitHub `Mobile CI` 会运行 API/移动端测试、类型检查、静态发布�
 
 通用规划入口 `POST /api/orchestrate` 接收 Goal + typed Context，并只向模型暴露服务端 capability catalog。模型返回的 capability ID、参数与依赖图会被服务端重新校验，risk 由 catalog 附加；未知能力、未知参数、循环依赖以及没有 required Decision 的空计划都会被拒绝。现有 `POST /api/plan` 继续作为面试邀请 reference scenario 的专用提取入口。
 
+Capability 是受治理的结果契约，不等同于“目标 App 必须已经提供 API”。长期执行策略优先选择系统 API、App Intents、第三方 API、native adapter 与 connector 等结构化路径，并为未来受控的 UI automation fallback 预留独立 `interactionMode`。当前版本只执行 `structured` adapter；executor 对 UI automation 明确 fail-closed，直到逐次预览/确认、结果验证、隐私和恢复机制完整落地。
+
 移动端首页默认使用通用 Goal 规划，并区分直接输入与系统 Sharesheet 带入的上下文；“按邀请内容提取”保留为明确的 reference 入口。两条路径最终都进入同一个持久 Task、确认快照、capability executor 与 receipt/recovery 流程。
 
 数据库基线位于 `supabase/migrations/202609190001_taskspace_core.sql`，为 tasks、append-only task events 与 devices 启用按 `auth.uid()` 隔离的 Row Level Security。`PUT /api/tasks` 会原子写入任务快照与审计事件，并使用 `syncVersion` 阻止旧设备覆盖新状态；登录后 App 优先恢复服务端最新任务，本地账号级 cache 只作离线回退。部署内测环境后仍须用两个真实测试账号验证跨账号读写被拒绝。

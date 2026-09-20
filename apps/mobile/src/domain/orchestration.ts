@@ -41,10 +41,18 @@ export interface PlanStepDefinition {
   policy?: CapabilityPolicySnapshot;
   dependsOn?: string[];
   input: Record<string, unknown>;
+  bindings?: StepInputBinding[];
   condition?: {
     kind: 'always' | 'receipt-match' | 'user-approved';
     configuration: Record<string, unknown>;
   };
+}
+
+export interface StepInputBinding {
+  targetKey: string;
+  fromStepId: string;
+  outputKey: string;
+  required: boolean;
 }
 
 export interface PlanDefinition {
@@ -69,6 +77,21 @@ export const compilePlanSteps = (definitions: PlanStepDefinition[]): TaskStep[] 
       if (!ids.has(dependency)) throw new Error(`Unknown dependency ${dependency} for ${step.id}`);
       if (dependency === step.id) throw new Error(`Plan step cannot depend on itself: ${step.id}`);
     }
+    const targets = new Set<string>();
+    for (const binding of step.bindings ?? []) {
+      if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(binding.targetKey)
+        || !/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(binding.outputKey)) {
+        throw new Error(`Invalid input binding for ${step.id}`);
+      }
+      if (!(step.dependsOn ?? []).includes(binding.fromStepId)) {
+        throw new Error(`Binding source ${binding.fromStepId} must be a dependency of ${step.id}`);
+      }
+      if (targets.has(binding.targetKey)) throw new Error(`Duplicate binding target ${binding.targetKey} for ${step.id}`);
+      if (Object.prototype.hasOwnProperty.call(step.input, binding.targetKey)) {
+        throw new Error(`Binding target ${binding.targetKey} already has a literal input for ${step.id}`);
+      }
+      targets.add(binding.targetKey);
+    }
   }
 
   const visiting = new Set<string>();
@@ -88,5 +111,6 @@ export const compilePlanSteps = (definitions: PlanStepDefinition[]): TaskStep[] 
     ...step,
     status: 'waiting',
     dependsOn: [...(step.dependsOn ?? [])],
+    bindings: step.bindings?.map((binding) => ({ ...binding })) ?? [],
   }));
 };

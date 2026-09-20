@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-09-19 — Layered execution policy and receipt bindings
+
+- Added constrained receipt-to-input bindings so a capability step can consume a declared top-level output from a direct dependency without scenario-specific executor logic.
+- Added server validation for binding sources, target capability fields, literal conflicts, dependency relationships, and required output handling.
+- Added `structured | ui_automation` interaction mode to capability policy snapshots and adapter drift checks.
+- Kept UI automation deliberately fail-closed while documenting the future preview, per-attempt approval, observed-result verification, privacy, and recovery requirements.
+- Clarified that capabilities are governed outcome contracts: structured APIs are preferred, while a controlled screen-interaction fallback may later cover apps without sufficient APIs.
+
 ## 2026-09-19 — Capability-neutral planner boundary
 
 - Added authenticated `POST /api/orchestrate` for direct goals plus typed, minimized context from email, message, webpage, app content, shared content, or direct input.

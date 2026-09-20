@@ -1,4 +1,4 @@
-import type { TaskContext, TaskTrigger, UserGoal } from './orchestration';
+import type { StepInputBinding, TaskContext, TaskTrigger, UserGoal } from './orchestration';
 
 export type TaskPhase =
   | 'draft'
@@ -23,6 +23,7 @@ export type CapabilityRisk = 'read' | 'write' | 'external-action' | 'destructive
 
 export interface CapabilityPolicySnapshot {
   executor: 'device' | 'server';
+  interactionMode: 'structured' | 'ui_automation';
   confirmation: 'never' | 'once_per_plan' | 'always';
   scopes: string[];
 }
@@ -47,6 +48,7 @@ export interface TaskStep {
   status: StepStatus;
   dependsOn: string[];
   input: Record<string, unknown>;
+  bindings?: StepInputBinding[];
   condition?: {
     kind: 'always' | 'receipt-match' | 'user-approved';
     configuration: Record<string, unknown>;

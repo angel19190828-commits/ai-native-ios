@@ -33,7 +33,7 @@ test('a non-invitation plan compiles and executes through the same generic orche
   assert.deepEqual(task.steps.map((step) => step.capabilityId), ['market.quote.read', 'notes.append']);
 
   const adapter = (id: string, risk: 'read' | 'write'): CapabilityAdapter => ({
-    descriptor: { id, title: id, risk, executor: 'server', confirmation: 'once_per_plan', scopes: [] },
+    descriptor: { id, title: id, risk, executor: 'server', interactionMode: 'structured', confirmation: 'once_per_plan', scopes: [] },
     execute: async () => ({ summary: `${id} complete` }),
   });
   const registry = new CapabilityRegistry([adapter('market.quote.read', 'read'), adapter('notes.append', 'write')]);
@@ -74,6 +74,16 @@ test('plan compiler rejects unknown dependencies and cycles before confirmation'
       { id: 'two', capabilityId: 'y', title: 'Two', risk: 'read', dependsOn: ['one'], input: {} },
     ] },
   }), /cycle/);
+
+  assert.throws(() => createTaskFromDefinition({
+    id: 'bad-binding', request: 'Do it', now: at,
+    plan: { ...base, steps: [
+      { id: 'one', capabilityId: 'x', title: 'One', risk: 'read', input: {} },
+      { id: 'two', capabilityId: 'y', title: 'Two', risk: 'write', dependsOn: [], input: {}, bindings: [
+        { targetKey: 'value', fromStepId: 'one', outputKey: 'value', required: true },
+      ] },
+    ] },
+  }), /must be a dependency/);
 });
 
 test('a required decision can defer all capability steps without inventing work', () => {

@@ -12,6 +12,7 @@ export interface CapabilityDescriptor {
   title: string;
   risk: CapabilityRisk;
   executor: 'device' | 'server';
+  interactionMode: 'structured' | 'ui_automation';
   confirmation: 'never' | 'once_per_plan' | 'always';
   scopes: string[];
 }

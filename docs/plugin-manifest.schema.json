@@ -21,12 +21,13 @@
     "action": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "title", "description", "risk", "confirmation", "scopes", "inputSchema", "resultSchema", "idempotency"],
+      "required": ["id", "title", "description", "risk", "interactionMode", "confirmation", "scopes", "inputSchema", "resultSchema", "idempotency"],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][A-Za-z0-9]*$" },
         "title": { "type": "string", "minLength": 1, "maxLength": 80 },
         "description": { "type": "string", "minLength": 1, "maxLength": 240 },
         "risk": { "enum": ["read", "write", "external-action", "destructive"] },
+        "interactionMode": { "enum": ["structured", "ui_automation"] },
         "confirmation": { "enum": ["never", "once-per-plan", "every-attempt"] },
         "scopes": {
           "type": "array",

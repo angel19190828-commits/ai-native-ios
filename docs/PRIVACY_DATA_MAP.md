@@ -24,6 +24,12 @@ Updated: 2026-09-19
 - A denial becomes a typed receipt/error state; it must not be reported as success.
 - Revoking permission must not erase task history or confirmation evidence.
 
+## Screen-interaction fallback (future, not enabled)
+
+UI automation is a distinct, higher-trust execution mode—not an implicit permission granted by enabling a capability. If introduced, screen pixels, accessibility trees, OCR text, and observed app state are sensitive task context. Collection must be bounded to the approved attempt, minimized before any model call, excluded from telemetry, and deleted under a documented retention policy.
+
+Every attempt must show what app/screen will be acted on, obtain explicit approval, verify the observed result, and preserve ambiguity in task state rather than claiming success. Purchases, payments, messages/posts, deletions, and booking changes cannot use a standing approval. The current executor rejects this mode until those controls exist.
+
 ## Logging rules
 
 Allowed: task ID, revision, capability ID, state transition, duration, error category, and opaque attempt ID.

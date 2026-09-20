@@ -11,7 +11,7 @@ test('generic proposal preserves shared context and derives only a presentation 
       summary: '周五聚餐', desiredOutcome: '创建聚餐日程和提醒', triggers: [{ id: 'manual', kind: 'manual', configuration: {} }], decisions: [],
       steps: [{
         id: 'calendar', capabilityId: 'system.calendar.createEvent', title: '创建聚餐日程', risk: 'write',
-        policy: { executor: 'device', confirmation: 'once_per_plan', scopes: ['calendar.write'] }, dependsOn: [],
+        policy: { executor: 'device', interactionMode: 'structured', confirmation: 'once_per_plan', scopes: ['calendar.write'] }, dependsOn: [],
         input: { title: 'Weekend Dinner', startDate: '2026-09-25T19:00:00-07:00', endDate: '2026-09-25T21:00:00-07:00', location: 'Miku Vancouver' },
       }],
     },

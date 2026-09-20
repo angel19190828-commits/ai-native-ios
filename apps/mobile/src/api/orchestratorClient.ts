@@ -43,6 +43,7 @@ interface ClientOptions {
 const risks = new Set(['read', 'write', 'external-action', 'destructive']);
 const triggerKinds = new Set(['manual', 'time', 'event', 'condition']);
 const executors = new Set(['device', 'server']);
+const interactionModes = new Set(['structured', 'ui_automation']);
 const confirmations = new Set(['never', 'once_per_plan', 'always']);
 
 const object = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -57,10 +58,14 @@ export const isOrchestrationProposal = (value: unknown): value is OrchestrationP
   if (!Array.isArray(value.steps) || !value.steps.every((step) => object(step)
     && typeof step.id === 'string' && typeof step.title === 'string' && typeof step.capabilityId === 'string'
     && risks.has(String(step.risk)) && object(step.policy)
-    && executors.has(String(step.policy.executor)) && confirmations.has(String(step.policy.confirmation))
+    && executors.has(String(step.policy.executor)) && interactionModes.has(String(step.policy.interactionMode))
+    && confirmations.has(String(step.policy.confirmation))
     && Array.isArray(step.policy.scopes) && step.policy.scopes.every((scope) => typeof scope === 'string')
     && Array.isArray(step.dependsOn)
-    && step.dependsOn.every((dependency) => typeof dependency === 'string') && object(step.input))) return false;
+    && step.dependsOn.every((dependency) => typeof dependency === 'string') && object(step.input)
+    && (step.bindings === undefined || (Array.isArray(step.bindings) && step.bindings.every((binding) => object(binding)
+      && typeof binding.targetKey === 'string' && typeof binding.fromStepId === 'string'
+      && typeof binding.outputKey === 'string' && typeof binding.required === 'boolean'))))) return false;
   return value.steps.length > 0 || value.decisions.some((decision) => decision.required && decision.resolvedValue === undefined);
 };
 

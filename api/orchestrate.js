@@ -8,6 +8,7 @@ const MAX_CONTEXT_LENGTH = 20000;
 const CONTEXT_KINDS = new Set(['direct-input', 'email', 'message', 'webpage', 'app-content', 'shared-content']);
 const TRIGGER_KINDS = new Set(['manual', 'time', 'event', 'condition']);
 const PLAN_ID = /^[a-z][a-z0-9-]{0,63}$/;
+const FIELD_KEY = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 
 const RESPONSE_SCHEMA = {
   type: 'OBJECT',
@@ -23,7 +24,10 @@ const RESPONSE_SCHEMA = {
     steps: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
       id: { type: 'STRING' }, title: { type: 'STRING' }, capabilityId: { type: 'STRING' },
       dependsOn: { type: 'ARRAY', items: { type: 'STRING' } }, inputJson: { type: 'STRING' },
-    }, required: ['id', 'title', 'capabilityId', 'dependsOn', 'inputJson'] } },
+      bindings: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+        targetKey: { type: 'STRING' }, fromStepId: { type: 'STRING' }, outputKey: { type: 'STRING' }, required: { type: 'BOOLEAN' },
+      }, required: ['targetKey', 'fromStepId', 'outputKey', 'required'] } },
+    }, required: ['id', 'title', 'capabilityId', 'dependsOn', 'inputJson', 'bindings'] } },
   },
   required: ['summary', 'desiredOutcome', 'triggers', 'decisions', 'steps'],
 };
@@ -46,6 +50,11 @@ function parseJsonObject(value, label) {
 
 function planId(value, label) {
   if (typeof value !== 'string' || !PLAN_ID.test(value)) throw new Error(`${label} is invalid`);
+  return value;
+}
+
+function fieldKey(value, label) {
+  if (typeof value !== 'string' || !FIELD_KEY.test(value)) throw new Error(`${label} is invalid`);
   return value;
 }
 
@@ -114,17 +123,31 @@ function validateProposal(raw) {
     if (typeof step.title !== 'string' || !step.title.trim() || step.title.length > 200) throw new Error('step title is invalid');
     if (!Array.isArray(step.dependsOn) || step.dependsOn.length > 20 || step.dependsOn.some((dependency) => typeof dependency !== 'string' || !PLAN_ID.test(dependency)) || new Set(step.dependsOn).size !== step.dependsOn.length) throw new Error('step dependencies are invalid');
     if (typeof step.inputJson !== 'string' || step.inputJson.length > 10000) throw new Error('step input is invalid');
-    const validated = validateCapabilityInput(step.capabilityId, parseJsonObject(step.inputJson, 'step input'));
+    if (!Array.isArray(step.bindings) || step.bindings.length > 20) throw new Error('step bindings are invalid');
+    const bindingTargets = new Set();
+    const bindings = step.bindings.map((binding) => {
+      if (!binding || typeof binding.required !== 'boolean') throw new Error('step binding is invalid');
+      const targetKey = fieldKey(binding.targetKey, 'binding target');
+      const fromStepId = planId(binding.fromStepId, 'binding source');
+      const outputKey = fieldKey(binding.outputKey, 'binding output');
+      if (!step.dependsOn.includes(fromStepId) || bindingTargets.has(targetKey)) throw new Error('step binding is invalid');
+      bindingTargets.add(targetKey);
+      return { targetKey, fromStepId, outputKey, required: binding.required };
+    });
+    const literalInput = parseJsonObject(step.inputJson, 'step input');
+    if ([...bindingTargets].some((key) => Object.prototype.hasOwnProperty.call(literalInput, key))) throw new Error('binding target conflicts with literal input');
+    const validated = validateCapabilityInput(step.capabilityId, literalInput, { deferredKeys: [...bindingTargets] });
     stepIds.add(id);
     return {
       id, title: step.title.trim(), capabilityId: validated.descriptor.id,
       risk: validated.descriptor.risk,
       policy: {
         executor: validated.descriptor.executor,
+        interactionMode: validated.descriptor.interactionMode,
         confirmation: validated.descriptor.confirmation,
         scopes: [...validated.descriptor.scopes],
       },
-      dependsOn: step.dependsOn, input: validated.input,
+      dependsOn: step.dependsOn, input: validated.input, bindings,
     };
   });
   for (const step of steps) {
@@ -169,6 +192,7 @@ module.exports = async function handler(req, res) {
     'Use only capability IDs in CAPABILITY_CATALOG. Do not invent capabilities or facts.',
     'Risk, scope, executor, and confirmation policy are enforced by the server; do not output them.',
     'Put each capability input in inputJson as a strict JSON object matching inputDescription.',
+    'When a later input comes from a dependency receipt, omit that literal input and add a binding: targetKey, fromStepId, outputKey, required. Bindings may only reference direct dependencies.',
     'If required information is missing, add a required decision. If no safe step can be formed, return zero steps.',
     'Dependencies must reference step IDs and form an acyclic graph.',
     `Current time: ${input.now}. Time zone: ${input.timeZone}. Locale: ${input.locale}.`,

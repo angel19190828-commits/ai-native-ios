@@ -18,8 +18,8 @@ const rawProposal = {
   summary: '安排明天的会面', desiredOutcome: '日历中有已确认的会面和提醒',
   triggers: [{ id: 'manual', kind: 'manual', configurationJson: '{}' }], decisions: [],
   steps: [
-    { id: 'calendar', title: '创建会面', capabilityId: 'system.calendar.createEvent', dependsOn: [], inputJson: JSON.stringify({ title: '会面', startDate: '2026-09-20T10:00:00-07:00', endDate: '2026-09-20T11:00:00-07:00' }) },
-    { id: 'reminder', title: '设置提醒', capabilityId: 'system.reminder.schedule', dependsOn: ['calendar'], inputJson: JSON.stringify({ eventStartsAt: '2026-09-20T10:00:00-07:00', preparation: [] }) },
+    { id: 'calendar', title: '创建会面', capabilityId: 'system.calendar.createEvent', dependsOn: [], bindings: [], inputJson: JSON.stringify({ title: '会面', startDate: '2026-09-20T10:00:00-07:00', endDate: '2026-09-20T11:00:00-07:00' }) },
+    { id: 'reminder', title: '设置提醒', capabilityId: 'system.reminder.schedule', dependsOn: ['calendar'], bindings: [], inputJson: JSON.stringify({ eventStartsAt: '2026-09-20T10:00:00-07:00', preparation: [] }) },
   ],
 };
 
@@ -40,8 +40,31 @@ test('catalog rejects unknown capabilities and unknown arguments', () => {
 test('server attaches capability risk and validates an acyclic proposal', () => {
   const proposal = handler.validateProposal(rawProposal);
   assert.deepEqual(proposal.steps.map((step) => step.risk), ['write', 'write']);
-  assert.deepEqual(proposal.steps[0].policy, { executor: 'device', confirmation: 'once_per_plan', scopes: ['calendar.write'] });
+  assert.deepEqual(proposal.steps[0].policy, { executor: 'device', interactionMode: 'structured', confirmation: 'once_per_plan', scopes: ['calendar.write'] });
   assert.deepEqual(proposal.steps[1].dependsOn, ['calendar']);
+});
+
+test('validates receipt bindings only for declared dependencies and capability inputs', () => {
+  const proposal = handler.validateProposal({ ...rawProposal, steps: [
+    rawProposal.steps[0],
+    {
+      ...rawProposal.steps[1], inputJson: JSON.stringify({ preparation: [] }),
+      bindings: [{ targetKey: 'eventStartsAt', fromStepId: 'calendar', outputKey: 'startDate', required: true }],
+    },
+  ] });
+  assert.deepEqual(proposal.steps[1].bindings[0], {
+    targetKey: 'eventStartsAt', fromStepId: 'calendar', outputKey: 'startDate', required: true,
+  });
+  assert.equal(proposal.steps[1].input.eventStartsAt, undefined);
+
+  assert.throws(() => handler.validateProposal({ ...rawProposal, steps: [
+    rawProposal.steps[0],
+    { ...rawProposal.steps[1], bindings: [{ targetKey: 'unknownField', fromStepId: 'calendar', outputKey: 'startDate', required: true }] },
+  ] }), /does not support binding target/);
+  assert.throws(() => handler.validateProposal({ ...rawProposal, steps: [
+    rawProposal.steps[0],
+    { ...rawProposal.steps[1], bindings: [{ targetKey: 'eventStartsAt', fromStepId: 'not-a-dependency', outputKey: 'startDate', required: true }] },
+  ] }), /step binding is invalid/);
 });
 
 test('required decisions may safely defer all execution steps', () => {

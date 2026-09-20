@@ -9,7 +9,7 @@ const proposal = {
   triggers: [{ id: 'manual', kind: 'manual', configuration: {} }], decisions: [],
   steps: [{
     id: 'calendar', capabilityId: 'system.calendar.createEvent', title: '创建日历', risk: 'write', dependsOn: [],
-    policy: { executor: 'device', confirmation: 'once_per_plan', scopes: ['calendar.write'] },
+    policy: { executor: 'device', interactionMode: 'structured', confirmation: 'once_per_plan', scopes: ['calendar.write'] },
     input: { title: '会面', startDate: '2026-09-20T10:00:00Z', endDate: '2026-09-20T11:00:00Z' },
   }],
 };

@@ -110,12 +110,31 @@ The mobile cache uses an append-and-replay task record with bounded compaction, 
 ## Capability execution contract
 
 1. Planner proposes an action using a registered action ID and validated arguments.
-2. Policy engine attaches data scopes, risk, confirmation requirements, and executor location.
+2. Policy engine attaches data scopes, risk, confirmation requirements, executor location, and interaction mode (`structured` or reserved `ui_automation`).
 3. User confirmation creates an immutable `ConfirmedPlan` with a revision and digest.
 4. Orchestrator creates an `ExecutionAttempt` and idempotency key.
 5. Native actions are delivered to the authorized device; server actions run in workers.
 6. Executor returns a typed receipt. Only a receipt can complete a step.
 7. Failures classify as retryable, decision-required, permission-denied, or terminal.
+
+### Layered execution strategy
+
+`Capability` is the stable outcome contract; its adapter is an execution strategy. The registry therefore remains the extension point for both structured providers and a future constrained UI-automation provider. Today every registered adapter is `interactionMode: structured`.
+
+The preferred path is always the most structured available provider: system API, App Intent, third-party API, native adapter, connector, deep link, or explicit handoff. A future `ui_automation` adapter must be registered like any other capability, declare screen-interaction scopes, and carry a materially stricter policy. It must not be an invisible generic escape hatch in the planner.
+
+The confirmed policy snapshot includes interaction mode. The executor compares it with the live adapter descriptor before dispatch, so an adapter cannot silently change from structured execution to screen interaction after review. The current executor deliberately rejects every `ui_automation` adapter because preview evidence, per-attempt approval, observed-result verification, and recovery are not implemented yet.
+
+Before enabling that mode, the architecture requires:
+
+- a user-visible action preview tied to the current app/screen and task revision;
+- explicit approval for each attempt, with no background bypass;
+- bounded navigation and allowlisted UI targets rather than unrestricted control;
+- post-action observation that can distinguish success, ambiguity, and failure;
+- screenshots/screen-derived data treated as sensitive context with strict retention and redaction;
+- recovery that never blindly repeats an ambiguous purchase, send, delete, booking, or account action.
+
+High-impact actions—including purchase, payment, send/post, delete, and booking modification—remain explicit-approval actions even when a structured provider exists.
 
 ## Initial capability IDs
 
@@ -173,9 +192,12 @@ The SDK 57 implementation compiles app-owned Swift declarations from `apps/mobil
 - rejects unregistered capability IDs and unknown arguments;
 - validates dates, ranges, lengths, and capability-specific required fields;
 - attaches authoritative risk from the catalog rather than trusting model output;
-- snapshots executor location, confirmation policy, and data scopes into every proposed step, then checks them against the device registry before dispatch;
+- snapshots executor location, interaction mode, confirmation policy, and data scopes into every proposed step, then checks them against the device registry before dispatch;
 - checks unique step IDs, known dependencies, and an acyclic graph;
+- validates explicit top-level receipt-to-input bindings against direct dependencies and the destination capability's supported input fields;
 - permits a zero-step proposal only when a required decision explicitly defers execution.
+
+A binding is dataflow, not executable templating: it maps one named `receipt.output` field from a direct dependency to one named input field on the current step. Arbitrary object paths, expressions, implicit dependency discovery, and overwriting literal confirmed inputs are rejected. Missing required outputs fail the step and preserve recovery state.
 
 The mobile `OrchestratorApiClient` validates the returned envelope again before it can reach the domain compiler. `/api/plan` remains the invitation reference extractor until the current UI is migrated; both endpoints share the same authenticated boundary and neither can execute capabilities directly.
 
@@ -185,7 +207,7 @@ Required decisions use the same persistent task rather than starting a chat-only
 
 ## Next generalization milestone
 
-The next milestone is to remove the remaining presentation compatibility layer and ship a second real vertical slice. It must:
+The next milestone is to remove the remaining presentation compatibility layer and ship a second real vertical slice. Receipt-to-input bindings now provide the generic dataflow needed for chained capabilities. The milestone must:
 
 1. replace `TaskFacts` with scenario-independent task summary/projection records and migrate older encrypted/server snapshots;
 2. add structured decision answer schemas instead of treating every answer as free text;
