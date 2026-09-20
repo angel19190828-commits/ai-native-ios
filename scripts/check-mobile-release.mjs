@@ -25,9 +25,10 @@ check(app.android?.package === 'com.ontingyu.taskspace', 'Android application ID
 check(typeof app.scheme === 'string' && app.scheme.length > 0, 'deep-link scheme');
 check(app.ios?.config?.usesNonExemptEncryption === false, 'export compliance declaration');
 const plugins = app.plugins.map((plugin) => Array.isArray(plugin) ? plugin[0] : plugin);
-for (const plugin of ['expo-calendar', 'expo-secure-store', 'expo-notifications', 'expo-build-properties', './plugins/withTaskspaceAndroidIntegrations']) {
+for (const plugin of ['@sentry/react-native/expo', 'expo-calendar', 'expo-secure-store', 'expo-notifications', 'expo-build-properties', './plugins/withTaskspaceAndroidIntegrations']) {
   check(plugins.includes(plugin), `${plugin} config plugin`);
 }
+check(Boolean(pkg.dependencies['@sentry/react-native']), 'Sentry React Native dependency');
 check(app.experiments?.inlineModules?.watchedDirectories?.includes('app-intents'), 'iOS App Intents inline module directory');
 check(!pkg.dependencies['expo-app-intents'], 'stable Expo SDK dependency alignment', 'expo-app-intents currently targets Expo SDK 58 beta and must not be mixed into the SDK 57 release build');
 for (const file of [
@@ -36,6 +37,9 @@ for (const file of [
   'app-intents/AppShortcuts.swift',
   'plugins/withTaskspaceAndroidIntegrations.js',
   'modules/taskspace-intake/android/src/main/java/expo/modules/taskspaceintake/TaskspaceIntakeModule.kt',
+  'metro.config.js',
+  'src/observability/monitoring.ts',
+  'src/observability/monitoringCore.ts',
 ]) {
   check(fs.existsSync(path.join(mobile, file)), `${file} exists`);
 }
@@ -58,6 +62,10 @@ if (!staticOnly) {
   check(/^https:\/\//.test(process.env.SUPABASE_URL ?? ''), 'server Supabase URL', 'SUPABASE_URL must be configured for the API deployment');
   check(Boolean(process.env.SUPABASE_PUBLISHABLE_KEY), 'server Supabase publishable key', 'SUPABASE_PUBLISHABLE_KEY is missing for JWT-scoped API access');
   check(Boolean(process.env.EAS_PROJECT_ID), 'EAS project ID', 'EAS_PROJECT_ID is missing; run eas init or configure the project ID');
+  check(/^https:\/\/[^\s@]+@[^\s/]+\/\d+$/.test(process.env.EXPO_PUBLIC_SENTRY_DSN ?? ''), 'Sentry public DSN', 'EXPO_PUBLIC_SENTRY_DSN must be a valid HTTPS ingest DSN');
+  check(Boolean(process.env.SENTRY_ORG), 'Sentry organization', 'SENTRY_ORG is missing for source-map upload');
+  check(Boolean(process.env.SENTRY_PROJECT), 'Sentry project', 'SENTRY_PROJECT is missing for source-map upload');
+  check(Boolean(process.env.SENTRY_AUTH_TOKEN), 'Sentry auth token', 'SENTRY_AUTH_TOKEN is missing for source-map upload');
   check(/^https:\/\//.test(process.env.PRIVACY_POLICY_URL ?? ''), 'privacy policy URL', 'PRIVACY_POLICY_URL must be published over HTTPS');
   check(/^https:\/\//.test(process.env.SUPPORT_URL ?? ''), 'support URL', 'SUPPORT_URL must be published over HTTPS');
   if (profile === 'production') {

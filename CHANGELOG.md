@@ -44,6 +44,8 @@
 - Added Android launcher shortcuts, `taskspace://` deep links, a text/plain Sharesheet target, and a local Kotlin Expo module that consumes shared text once into the intake screen.
 - Added native integration release checks and App Intent/Android Sharesheet device QA cases.
 - Expanded mobile automated coverage to 33 tests; Expo Doctor passes all 21 checks.
+- Added Sentry crash/session/performance monitoring with EAS source-map wiring, DSN/build-secret release gates, and a tested privacy scrubber that removes task content, identity, request payloads, screenshots, and free-form exception text before transmission.
+- Added static performance spans for AI planning and capability execution plus structured operational error codes; expanded mobile automated coverage to 36 tests.
 
 ### Web prototype
 

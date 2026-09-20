@@ -41,3 +41,11 @@
 - Privacy policy, support page, deletion path, screenshots, review notes, and Data safety/App Privacy answers complete
 
 Record device model, OS version, build number, workflow result, permission state, and evidence link for every run. A simulator-only result is not sufficient.
+
+## Crash and performance monitoring
+
+- Install a release/preview build with a real Sentry DSN and confirm app launch creates a session without attaching a user ID.
+- Trigger a controlled non-production operational error and confirm it is symbolicated after the EAS source-map upload.
+- Inspect the received event: source text, address, draft, email, account ID, request body, screenshots, and view hierarchy must be absent.
+- Confirm sampled `task.plan` and `task.execute_step` transactions appear with only static operation names.
+- Launch without a DSN and confirm the app remains functional and no monitoring network request is attempted.

@@ -39,3 +39,12 @@ Prohibited: access tokens, refresh tokens, provider credentials, full email bodi
 - Implement backend retention controls and a published privacy policy.
 - Configure redaction tests for API logs and crash telemetry.
 - Complete App Store privacy labels and Google Play Data safety declarations from this map.
+
+## Crash and performance monitoring
+
+- Release builds use Sentry only when `EXPO_PUBLIC_SENTRY_DSN` is configured.
+- Default PII collection, screenshots, view hierarchy attachments, and Session Replay are disabled.
+- Before transmission, monitoring events remove user identity, request data, contexts, extras, free-form messages, exception messages, and breadcrumb payloads.
+- Allowed metadata is limited to static operation names plus `error_code`, `phase`, `capability`, `operation`, and `release_channel` tags.
+- Email/notification source text, addresses, task drafts, account IDs, access tokens, confirmation snapshots, and executor receipt bodies must never be attached to monitoring events.
+- `SENTRY_AUTH_TOKEN` is build-only and must be stored as a sensitive EAS environment secret; it is never exposed through an `EXPO_PUBLIC_` variable.

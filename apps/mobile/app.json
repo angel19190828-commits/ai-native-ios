@@ -8,6 +8,7 @@
     "scheme": "taskspace",
     "userInterfaceStyle": "dark",
     "plugins": [
+      "@sentry/react-native/expo",
       [
         "expo-calendar",
         {

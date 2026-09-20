@@ -144,3 +144,7 @@ The SDK 57 implementation compiles app-owned Swift declarations from `apps/mobil
 6. Immutable confirmation, idempotent execution, stop/retry, and receipts.
 7. Share targets, App Intents/App Shortcuts, Android shortcuts/deep links.
 8. Privacy, observability, device QA, TestFlight, and Android internal testing.
+
+## Observability boundary
+
+`src/observability/monitoring.ts` is the only mobile module allowed to call the monitoring SDK directly. Product code reports stable error codes and static lifecycle phases, never caught exception text or task content. A pure, tested sanitizer runs in Sentry's `beforeSend`, `beforeSendTransaction`, and `beforeBreadcrumb` hooks. Metro emits debug IDs/source maps, while the build-only `SENTRY_AUTH_TOKEN` authorizes upload from EAS. Monitoring is disabled when the public DSN is absent or malformed.

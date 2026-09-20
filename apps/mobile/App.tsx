@@ -16,8 +16,9 @@ import { asyncTaskStore } from './src/storage/nativeStores';
 import { TaskCache } from './src/storage/taskCache';
 import TaskspaceIntakeModule from './modules/taskspace-intake/src/TaskspaceIntakeModule';
 import { consumeAppIntents, TaskspaceAppIntentInvocation } from './src/native/taskspaceAppIntents';
+import { captureOperationalError, traceOperation, withMonitoring } from './src/observability/monitoring';
 
-export default function App() {
+function App() {
   const [authReady, setAuthReady] = useState(false);
   const [userId, setUserId] = useState<string>();
   const [authEmail, setAuthEmail] = useState('');
@@ -129,6 +130,7 @@ export default function App() {
       if (mounted) setUserId(session?.user.id);
     });
     void currentSession().then((session) => { if (mounted) setUserId(session?.user.id); }).catch(() => {
+      captureOperationalError('auth_session_restore_failed', { phase: 'authentication', operation: 'session.restore' });
       if (mounted) setAuthNotice('无法恢复登录会话。');
     }).finally(() => { if (mounted) setAuthReady(true); });
     return () => {
@@ -154,6 +156,7 @@ export default function App() {
               await AsyncStorage.setItem(lastTaskKey, restored.id);
             }
           } catch {
+            captureOperationalError('server_task_restore_failed', { phase: 'restoring', operation: 'task.restore' });
             if (mounted) setNotice('服务端任务暂时不可用，正在显示这台设备最近保存的状态。');
           }
         }
@@ -162,6 +165,7 @@ export default function App() {
         setTask(restored);
         setDraft((await taskCache.loadDraft(restored.id)) || '按这个安排');
       } catch {
+        captureOperationalError('local_task_restore_failed', { phase: 'restoring', operation: 'task.restore' });
         if (mounted) setNotice('本地任务恢复失败；发送前请重新检查安排。');
       } finally {
         if (mounted) setCacheReady(true);
@@ -197,11 +201,11 @@ export default function App() {
     if (!apiBaseUrl) return setNotice('尚未配置 EXPO_PUBLIC_API_BASE_URL，无法连接 AI 服务。');
     setBusy(true);
     try {
-      const response = await aiClient.planInvitation({
+      const response = await traceOperation('task.plan', 'ai.plan', () => aiClient.planInvitation({
         sourceText,
         locale: Intl.DateTimeFormat().resolvedOptions().locale || 'zh-CN',
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-      });
+      }));
       const now = new Date().toISOString();
       const proposedTask = createTaskFromPlan({ id: Crypto.randomUUID(), request: sourceText, plan: response.plan, now, origin: origin.trim() || undefined });
       const nextTask = await saveSnapshot(proposedTask, { type: 'task.created', at: now });
@@ -213,6 +217,7 @@ export default function App() {
       if (nextTask.phase === 'needs_decision') setNotice(nextTask.pendingDecision?.prompt);
     } catch (error) {
       const code = error instanceof AiApiError ? error.code : 'unknown';
+      captureOperationalError(`ai_plan_${code}`, { phase: 'planning', operation: 'ai.plan' });
       setNotice(`AI 规划失败（${code}）。你的原始内容仍保留，可以重试。`);
     } finally {
       setBusy(false);
@@ -228,7 +233,7 @@ export default function App() {
     try {
       while (current.phase === 'executing' && !controller.signal.aborted) {
         let emitted = current;
-        const outcome = await executeNextStep(current, registry, {
+        const outcome = await traceOperation('task.execute_step', 'task.execute', () => executeNextStep(current, registry, {
           userId: userId ?? 'local-user',
           deviceId: 'local-device',
           signal: controller.signal,
@@ -239,7 +244,7 @@ export default function App() {
             current = emitted;
             setTask(emitted);
           },
-        });
+        }));
         current = emitted;
         if (!outcome) {
           if (current.steps.some((step) => step.status === 'running')) {
@@ -257,6 +262,7 @@ export default function App() {
         setNotice('日历、通勤和提醒均已完成，并保存了执行回执。');
       }
     } catch {
+      captureOperationalError('execution_record_interrupted', { phase: 'executing', operation: 'task.execute' });
       if (!controller.signal.aborted) setNotice('执行记录中断；已停止派发新操作，请从当前回执恢复。');
     } finally {
       if (executionController.current === controller) executionController.current = undefined;
@@ -284,6 +290,7 @@ export default function App() {
       setNotice('计划已锁定，正在从 Calendar 开始执行。');
       await executeConfirmedTask(confirmed);
     } catch {
+      captureOperationalError('confirmation_persist_failed', { phase: 'confirming', operation: 'plan.confirm' });
       setNotice('确认没有保存成功，尚未开始任何系统操作。');
     } finally {
       setBusy(false);
@@ -299,6 +306,7 @@ export default function App() {
       setTask(stopped);
       setNotice('已停止剩余操作；已经完成的操作和回执不会被隐藏。');
     } catch (error) {
+      captureOperationalError(error instanceof TaskSyncError && error.status === 409 ? 'stop_sync_conflict' : 'stop_persist_failed', { phase: 'stopping', operation: 'task.stop' });
       setNotice(error instanceof TaskSyncError && error.status === 409 ? '任务已在另一台设备更新，请重新载入后再停止。' : '停止请求未能保存，请检查当前任务状态。');
     }
   };
@@ -458,3 +466,5 @@ const styles = StyleSheet.create({
   row: { minHeight: 100, marginBottom: 12, padding: 16, borderRadius: 22, borderWidth: 1, borderColor: 'transparent', backgroundColor: '#171a20', flexDirection: 'row', alignItems: 'center', gap: 14 }, rowPressed: { opacity: 0.82, transform: [{ scale: 0.99 }] }, rowSelected: { borderColor: '#6da5ff', backgroundColor: '#192b45' }, rowIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#20304a', alignItems: 'center', justifyContent: 'center' }, rowIconText: { color: '#a8c8ff', fontSize: 20 }, rowCopy: { flex: 1, gap: 3 }, rowLabel: { color: '#939aa6', fontSize: 13 }, rowValue: { color: '#f4f6fa', fontSize: 20, lineHeight: 25, fontWeight: '700' }, rowDetail: { color: '#b2b8c2', fontSize: 14, lineHeight: 20 },
   composerLayer: { position: 'absolute', left: 0, right: 0, bottom: 0 }, composerRow: { marginHorizontal: 16, marginBottom: 18, flexDirection: 'row', alignItems: 'flex-end', gap: 10 }, composer: { flex: 1, minHeight: 58, maxHeight: 118, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 29, backgroundColor: 'rgba(31,33,39,0.96)', justifyContent: 'center' }, context: { alignSelf: 'flex-start', marginBottom: 3, color: '#a8c8ff', fontSize: 12, fontWeight: '600' }, input: { minHeight: 24, maxHeight: 66, color: '#f5f6f9', fontSize: 16 }, send: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#e9f0ff', alignItems: 'center', justifyContent: 'center' }, sendGlyph: { color: '#1266fa', fontSize: 29, lineHeight: 31, fontWeight: '400' },
 });
+
+export default withMonitoring(App);
