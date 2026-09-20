@@ -48,6 +48,8 @@ Capability 是受治理的结果契约，不等同于“目标 App 必须已经�
 
 移动端首页默认使用通用 Goal 规划，并区分直接输入与系统 Sharesheet 带入的上下文；“按邀请内容提取”保留为明确的 reference 入口。两条路径最终都进入同一个持久 Task、确认快照、capability executor 与 receipt/recovery 流程。
 
+原生体验页现在提供“直接说目标”和“使用当前上下文”两个入口，并内置可编辑的群聊聚餐与邮件面试示例。完整操作、真实 capability 边界和真机观察项见 [`docs/EXPERIENCE_WALKTHROUGH.md`](docs/EXPERIENCE_WALKTHROUGH.md)。
+
 数据库基线位于 `supabase/migrations/202609190001_taskspace_core.sql`，为 tasks、append-only task events 与 devices 启用按 `auth.uid()` 隔离的 Row Level Security。`PUT /api/tasks` 会原子写入任务快照与审计事件，并使用 `syncVersion` 阻止旧设备覆盖新状态；登录后 App 优先恢复服务端最新任务，本地账号级 cache 只作离线回退。部署内测环境后仍须用两个真实测试账号验证跨账号读写被拒绝。
 
 直接用浏览器打开即可,无需安装、无需构建。本地打开时"AI 分析"功能需要额外起一个本地代理(见下方「本地运行」),线上版本已经连了部署好的后端,可以直接粘贴任意邮件文本试真实解析。

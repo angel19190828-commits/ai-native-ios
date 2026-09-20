@@ -56,7 +56,7 @@ for (const name of ['development', 'preview', 'production']) {
 }
 check(eas.build?.preview?.distribution === 'internal', 'Android/iOS internal preview profile');
 check(eas.build?.production?.autoIncrement === true, 'production build auto-increment');
-for (const document of ['MVP_SCOPE.md', 'ARCHITECTURE.md', 'PRIVACY_DATA_MAP.md', 'STORE_LISTING.md', 'DEVICE_QA.md', 'RELEASE_RUNBOOK.md']) {
+for (const document of ['MVP_SCOPE.md', 'ARCHITECTURE.md', 'PRIVACY_DATA_MAP.md', 'STORE_LISTING.md', 'DEVICE_QA.md', 'RELEASE_RUNBOOK.md', 'EXPERIENCE_WALKTHROUGH.md']) {
   check(fs.existsSync(path.join(root, 'docs', document)), `${document} exists`);
 }
 for (const page of ['privacy.html', 'support.html']) {

@@ -31,6 +31,7 @@ function App() {
   const [authNotice, setAuthNotice] = useState<string>();
   const [task, setTask] = useState<Task>();
   const [sourceText, setSourceText] = useState('');
+  const [goalText, setGoalText] = useState('');
   const [sourceKind, setSourceKind] = useState<OrchestrationContextInput['kind']>('direct-input');
   const [origin, setOrigin] = useState('');
   const [draft, setDraft] = useState('按这个安排');
@@ -71,6 +72,7 @@ function App() {
         executionController.current?.abort();
         setTask(undefined);
         setSourceText(request);
+        setGoalText(request);
         setSourceKind('direct-input');
         setOrigin('');
         setSelectedContext(undefined);
@@ -101,6 +103,7 @@ function App() {
         executionController.current?.abort();
         setTask(undefined);
         setSourceText(parsed.searchParams.get('text') ?? '');
+        setGoalText(parsed.searchParams.get('text') ?? '');
         setSourceKind('direct-input');
         setSelectedContext(undefined);
         setNotice('已从系统快捷方式打开新任务。');
@@ -124,6 +127,7 @@ function App() {
       executionController.current?.abort();
       setTask(undefined);
       setSourceText(text);
+      setGoalText('根据这些内容帮我形成一个可执行的安排');
       setSourceKind('shared-content');
       setOrigin('');
       setSelectedContext(undefined);
@@ -247,7 +251,7 @@ function App() {
 
   const analyzeGoal = async () => {
     setNotice(undefined);
-    const goal = sourceText.trim();
+    const goal = (sourceKind === 'direct-input' ? sourceText : goalText).trim();
     if (!goal) return setNotice('先描述你想完成的目标。');
     if (!apiBaseUrl) return setNotice('尚未配置 EXPO_PUBLIC_API_BASE_URL，无法连接 AI 服务。');
     setBusy(true);
@@ -427,6 +431,53 @@ function App() {
     }
   };
 
+  const revisePlan = async () => {
+    if (!task || !selectedContext) return;
+    const instruction = draft.trim();
+    if (!instruction || instruction === '按这个安排') return setNotice('请先写下想修改的内容。');
+    if (!apiBaseUrl) return setNotice('尚未配置 API，无法修改计划。');
+    setBusy(true);
+    setNotice(undefined);
+    try {
+      const at = new Date().toISOString();
+      const priorContext: OrchestrationContextInput[] = task.context?.length
+        ? task.context.map((item) => ({
+          id: item.id, kind: item.kind, sourceApp: item.sourceApp, title: item.title,
+          content: typeof item.data.content === 'string' ? item.data.content : JSON.stringify(item.data),
+        }))
+        : [{ id: 'reference-source', kind: 'email', title: '原始邀请', content: task.request }];
+      const context: OrchestrationContextInput[] = [...priorContext, {
+        id: `review-change-${task.revision + 1}`, kind: 'direct-input',
+        title: `修改：${selectedContext}`, content: instruction,
+      }];
+      const response = await traceOperation('task.revise', 'ai.plan', () => orchestratorClient.propose({
+        goal: task.goal?.summary ?? task.request, context,
+        locale: Intl.DateTimeFormat().resolvedOptions().locale || 'zh-CN',
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      }));
+      const candidate = createTaskFromDefinition({
+        id: task.id, request: task.request, now: at,
+        plan: genericProposalToPlanDefinition({ request: task.request, proposal: response.proposal, context, now: at, origin: task.facts.origin }),
+      });
+      let revised = await appendEvent(task.id, { type: 'planning.started', at });
+      revised = await appendEvent(revised.id, {
+        type: 'planning.ready', at, facts: candidate.facts, steps: candidate.steps,
+        goal: candidate.goal, context: candidate.context, triggers: candidate.triggers,
+      });
+      if (candidate.pendingDecision) revised = await appendEvent(revised.id, { type: 'decision.required', at, decision: candidate.pendingDecision });
+      setTask(revised);
+      setDraft('按这个安排');
+      setSelectedContext(undefined);
+      setNotice(candidate.pendingDecision?.prompt ?? '计划已按你的修改更新；这是新的 revision，请重新审阅。');
+    } catch (error) {
+      const code = error instanceof AiApiError ? error.code : 'unknown';
+      captureOperationalError(`review_replan_${code}`, { phase: 'planning', operation: 'task.revise' });
+      setNotice(`计划修改失败（${code}）。原计划和你的输入均未执行，可以重试。`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const stopExecution = async () => {
     if (!task || task.phase !== 'executing') return;
     executionController.current?.abort();
@@ -445,6 +496,7 @@ function App() {
     await AsyncStorage.removeItem(lastTaskKey);
     setTask(undefined);
     setSourceText('');
+    setGoalText('');
     setSourceKind('direct-input');
     setOrigin('');
     setDraft('按这个安排');
@@ -568,6 +620,7 @@ function App() {
                 executionController.current?.abort();
                 setTask(undefined);
                 setSourceText('');
+                setGoalText('');
                 setSourceKind('direct-input');
                 setOrigin('');
                 setDraft('按这个安排');
@@ -589,7 +642,7 @@ function App() {
   if (!authReady) return <SafeAreaView style={[styles.screen, styles.center]}><ActivityIndicator color="#1266fa" /></SafeAreaView>;
   if (!userId) return <AuthScreen configured={isAuthConfigured()} email={authEmail} setEmail={setAuthEmail} code={authCode} setCode={setAuthCode} codeSent={codeSent} notice={authNotice} busy={busy} sendCode={sendLoginCode} verify={completeLogin} />;
   if (!cacheReady) return <SafeAreaView style={[styles.screen, styles.center]}><ActivityIndicator color="#1266fa" /></SafeAreaView>;
-  if (!task) return <IntakeScreen sourceText={sourceText} setSourceText={setSourceText} origin={origin} setOrigin={setOrigin} busy={busy} notice={notice} analyzeGoal={analyzeGoal} analyzeInvitation={analyzeInvitation} deleteAccount={isAuthConfigured() ? requestAccountDeletion : undefined} />;
+  if (!task) return <IntakeScreen sourceText={sourceText} setSourceText={setSourceText} goalText={goalText} setGoalText={setGoalText} sourceKind={sourceKind} setSourceKind={setSourceKind} origin={origin} setOrigin={setOrigin} busy={busy} notice={notice} analyzeGoal={analyzeGoal} analyzeInvitation={analyzeInvitation} deleteAccount={isAuthConfigured() ? requestAccountDeletion : undefined} />;
 
   const routeOutput = task.steps.find((step) => step.id === 'commute')?.receipt?.output;
   const departureAt = typeof routeOutput?.departureAt === 'string' ? formatTime(routeOutput.departureAt) : task.facts.departureAt;
@@ -607,7 +660,7 @@ function App() {
     ? task.steps.map((step) => ({
       label: step.title,
       value: capabilityLabel(step.capabilityId),
-      detail: [summarizeStepInput(step.input), step.policy?.scopes.length ? `权限：${step.policy.scopes.join('、')}` : undefined].filter(Boolean).join(' · '),
+      detail: [summarizeStepInput(step.input), capabilityReality(step.capabilityId), step.policy?.scopes.length ? `权限：${step.policy.scopes.join('、')}` : undefined].filter(Boolean).join(' · '),
     }))
     : invitationRows;
 
@@ -622,10 +675,12 @@ function App() {
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.taskHeader}><Text style={styles.eyebrow}>{task.facts.title}</Text><View style={styles.headerActions}><Pressable onPress={startNewTask}><Text style={styles.newTask}>新任务</Text></Pressable>{isAuthConfigured() ? <Pressable onPress={logout}><Text style={styles.signOut}>退出</Text></Pressable> : null}</View></View>
+        <TaskJourney phase={task.phase} />
         <Text style={styles.title}>{task.phase === 'needs_decision' ? '还需要一点信息。' : '安排整理好了。'}</Text>
-        <Text style={styles.subtitle}>点选内容进行修改，或直接按这个安排确认。</Text>
+        <Text style={styles.subtitle}>{task.pendingDecision?.prompt ?? task.goal?.desiredOutcome ?? '点选内容进行修改，或直接按这个安排确认。'}</Text>
         {notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
-        {task.confirmedPlan ? <View style={styles.activity}>{task.steps.map((step) => <View key={step.id} style={styles.activityRow}><Text style={styles.activityStatus}>{statusGlyph(step.status)}</Text><View style={styles.activityCopy}><Text style={styles.activityTitle}>{step.title}</Text><Text style={styles.activityDetail}>{step.receipt?.summary ?? statusLabel(step.status)}</Text></View></View>)}</View> : null}
+        <View style={styles.executionBoundary}><Text style={styles.executionBoundaryTitle}>本次执行边界</Text><Text style={styles.executionBoundaryText}>{task.steps.length ? task.steps.map((step) => capabilityLabel(step.capabilityId)).join(' → ') : '等待补齐决定后生成 capability steps'}</Text><Text style={styles.executionBoundaryHint}>只有这里列出的已注册能力会在确认后执行；餐厅搜索、预订或付款不会被暗中模拟。</Text></View>
+        {task.confirmedPlan ? <View style={styles.activity}><Text style={styles.activityHeading}>{task.phase === 'completed' || task.phase === 'partially_completed' ? '执行回执' : 'Task Activity'}</Text>{task.steps.map((step) => <View key={step.id} style={styles.activityRow}><Text style={styles.activityStatus}>{statusGlyph(step.status)}</Text><View style={styles.activityCopy}><Text style={styles.activityTitle}>{step.title}</Text><Text style={styles.activityDetail}>{step.receipt?.summary ?? statusLabel(step.status)}</Text>{step.receipt?.completedAt ? <Text style={styles.receiptMeta}>{formatDate(step.receipt.completedAt)} · 已保存 receipt</Text> : null}</View></View>)}</View> : null}
         {rows.map((row) => <PlanRow key={row.label} {...row} selected={selectedContext === row.label} onPress={() => { setSelectedContext(row.label); setDraft((current) => current === '按这个安排' ? '' : current); }} />)}
         <View style={styles.dataActions}>
           <Pressable disabled={busy} onPress={requestTaskDeletion}><Text style={styles.deleteAccount}>永久删除这个任务</Text></Pressable>
@@ -638,7 +693,7 @@ function App() {
             {selectedContext ? <Pressable onPress={() => setSelectedContext(undefined)}><Text style={styles.context}>{selectedContext}　×</Text></Pressable> : null}
             <TextInput style={styles.input} value={draft} onChangeText={setDraft} placeholder={task.phase === 'needs_decision' ? '回答当前问题…' : '告诉 AI 想怎么改…'} placeholderTextColor="#8e949f" multiline maxLength={1000} />
           </View>
-          <Pressable disabled={busy || task.phase === 'completed' || task.phase === 'stopped' || task.phase === 'executing'} accessibilityRole="button" accessibilityLabel={task.phase === 'needs_decision' ? '发送回答' : '发送并确认'} onPress={task.phase === 'needs_decision' ? submitDecision : task.confirmedPlan ? () => executeConfirmedTask(task) : confirmPlan} style={({ pressed }) => [styles.send, pressed && styles.pressed, (busy || task.phase === 'completed' || task.phase === 'stopped' || task.phase === 'executing') && styles.disabled]}>
+          <Pressable disabled={busy || task.phase === 'completed' || task.phase === 'stopped' || task.phase === 'executing'} accessibilityRole="button" accessibilityLabel={task.phase === 'needs_decision' ? '发送回答' : selectedContext && draft.trim() !== '按这个安排' ? '发送修改' : '确认并执行'} onPress={task.phase === 'needs_decision' ? submitDecision : selectedContext && draft.trim() !== '按这个安排' ? revisePlan : task.confirmedPlan ? () => executeConfirmedTask(task) : confirmPlan} style={({ pressed }) => [styles.send, pressed && styles.pressed, (busy || task.phase === 'completed' || task.phase === 'stopped' || task.phase === 'executing') && styles.disabled]}>
             {busy ? <ActivityIndicator color="#1266fa" /> : <Text style={styles.sendGlyph}>↑</Text>}
           </Pressable>
         </View>
@@ -647,17 +702,52 @@ function App() {
   );
 }
 
-function IntakeScreen({ sourceText, setSourceText, origin, setOrigin, busy, notice, analyzeGoal, analyzeInvitation, deleteAccount }: { sourceText: string; setSourceText: (value: string) => void; origin: string; setOrigin: (value: string) => void; busy: boolean; notice?: string; analyzeGoal: () => void; analyzeInvitation: () => void; deleteAccount?: () => void }) {
+function IntakeScreen({ sourceText, setSourceText, goalText, setGoalText, sourceKind, setSourceKind, origin, setOrigin, busy, notice, analyzeGoal, analyzeInvitation, deleteAccount }: {
+  sourceText: string; setSourceText: (value: string) => void; goalText: string; setGoalText: (value: string) => void;
+  sourceKind: OrchestrationContextInput['kind']; setSourceKind: (value: OrchestrationContextInput['kind']) => void;
+  origin: string; setOrigin: (value: string) => void; busy: boolean; notice?: string;
+  analyzeGoal: () => void; analyzeInvitation: () => void; deleteAccount?: () => void;
+}) {
+  const contextMode = sourceKind !== 'direct-input';
+  const useDinnerDemo = () => {
+    setSourceKind('message');
+    setGoalText('根据群聊安排周五晚餐，创建日历、计算通勤并提醒我出发');
+    setSourceText('Mia：周五一起吃饭？\nAlex：晚上 7 点后可以，最好 Downtown。\nSam：想吃日料。\nJo：六个人，需要预留座位。\n暂定 Miku Vancouver，200 Granville Street。');
+    setOrigin('');
+  };
+  const useInterviewDemo = () => {
+    setSourceKind('email');
+    setGoalText('安排这封面试邀请');
+    setSourceText('Hi Jade,\n\nYour in-person interview with Alex is on July 28, 2027 at 10:30 AM. The address is 555 Burrard Street. Please arrive 15 minutes early and bring your portfolio.\n\nIf you need to reschedule, please contact Alex.');
+    setOrigin('1285 W Pender Street, Vancouver');
+  };
   return <SafeAreaView style={styles.screen}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.intakeContent}>
-    <Text style={styles.brand}>TASKSPACE AI</Text><Text style={styles.intakeTitle}>说出目标，审阅后再执行</Text><Text style={styles.intakeSubtitle}>描述想完成的事，或粘贴来自邮件、消息、网页和其他 App 的内容。AI 提出计划；系统只执行已注册且由你确认的能力。</Text>
-    <TextInput accessibilityLabel="目标或上下文" multiline maxLength={20000} value={sourceText} onChangeText={setSourceText} placeholder="例如：帮我安排明天下午与 Alex 的会面，并提前提醒我。" placeholderTextColor="#858b95" style={styles.sourceInput} />
+    <Text style={styles.brand}>TASKSPACE AI</Text><Text style={styles.intakeTitle}>从意图开始，跨 App 完成</Text><Text style={styles.intakeSubtitle}>AI 会理解目标与当前上下文，提出可审阅计划，补齐决定，再通过已注册能力执行并留下回执。</Text>
+    <View style={styles.entryTabs}>
+      <Pressable accessibilityRole="tab" accessibilityState={{ selected: !contextMode }} onPress={() => { setSourceKind('direct-input'); setGoalText(''); }} style={[styles.entryTab, !contextMode && styles.entryTabSelected]}><Text style={[styles.entryTabText, !contextMode && styles.entryTabTextSelected]}>直接说目标</Text></Pressable>
+      <Pressable accessibilityRole="tab" accessibilityState={{ selected: contextMode }} onPress={() => { setSourceKind('shared-content'); if (!goalText) setGoalText('根据这些内容帮我完成一个任务'); }} style={[styles.entryTab, contextMode && styles.entryTabSelected]}><Text style={[styles.entryTabText, contextMode && styles.entryTabTextSelected]}>使用当前上下文</Text></Pressable>
+    </View>
+    {contextMode ? <>
+      <Text style={styles.fieldLabel}>我想完成</Text>
+      <TextInput accessibilityLabel="用户目标" maxLength={4000} value={goalText} onChangeText={setGoalText} placeholder="例如：根据群聊安排周五晚餐" placeholderTextColor="#858b95" style={styles.goalInput} />
+      <Text style={styles.fieldLabel}>当前上下文</Text>
+    </> : <Text style={styles.fieldLabel}>我想完成</Text>}
+    <TextInput accessibilityLabel={contextMode ? '当前上下文' : '用户目标'} multiline maxLength={20000} value={sourceText} onChangeText={setSourceText} placeholder={contextMode ? '粘贴邮件、消息、网页或商品信息…' : '例如：安排周五晚餐，并在出发前提醒我。'} placeholderTextColor="#858b95" style={[styles.sourceInput, contextMode && styles.contextInput]} />
     <TextInput accessibilityLabel="出发地点" value={origin} onChangeText={setOrigin} placeholder="出发地点（通勤安排需要，可稍后补充）" placeholderTextColor="#858b95" style={styles.originInput} />
+    <View style={styles.demoSection}><Text style={styles.demoLabel}>快速体验</Text><View style={styles.demoRow}><Pressable onPress={useDinnerDemo} style={styles.demoCard}><Text style={styles.demoTitle}>群聊 → 聚餐</Text><Text style={styles.demoDetail}>第二个真实场景</Text></Pressable><Pressable onPress={useInterviewDemo} style={styles.demoCard}><Text style={styles.demoTitle}>邮件 → 面试</Text><Text style={styles.demoDetail}>Reference scenario</Text></Pressable></View></View>
     {notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
-    <Pressable disabled={busy} onPress={analyzeGoal} style={({ pressed }) => [styles.primary, pressed && styles.pressed, busy && styles.disabled]}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryLabel}>根据目标生成计划</Text>}</Pressable>
-    <Pressable disabled={busy} onPress={analyzeInvitation} style={({ pressed }) => [styles.secondary, pressed && styles.pressed, busy && styles.disabled]}><Text style={styles.secondaryLabel}>按邀请内容提取（Reference）</Text></Pressable>
+    <Pressable disabled={busy} onPress={analyzeGoal} style={({ pressed }) => [styles.primary, pressed && styles.pressed, busy && styles.disabled]}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryLabel}>理解意图并生成计划</Text>}</Pressable>
+    {sourceKind === 'email' ? <Pressable disabled={busy} onPress={analyzeInvitation} style={({ pressed }) => [styles.secondary, pressed && styles.pressed, busy && styles.disabled]}><Text style={styles.secondaryLabel}>使用面试邀请 Reference 解析器</Text></Pressable> : null}
     <Text style={styles.privacyHint}>不会在手机中保存 API Key。原始内容仅发送到你配置的 Taskspace API。</Text>
     {deleteAccount ? <Pressable disabled={busy} onPress={deleteAccount}><Text style={styles.deleteAccountStandalone}>永久删除账户与数据</Text></Pressable> : null}
   </ScrollView></KeyboardAvoidingView></SafeAreaView>;
+}
+
+const JOURNEY = ['Intent', 'Plan', 'Decision', 'Review', 'Execution', 'Receipt'];
+
+function TaskJourney({ phase }: { phase: Task['phase'] }) {
+  const active = phase === 'draft' ? 0 : phase === 'planning' ? 1 : phase === 'needs_decision' ? 2 : phase === 'ready' ? 3 : phase === 'executing' ? 4 : 5;
+  return <View accessibilityLabel={`任务阶段：${JOURNEY[active]}`} style={styles.journey}>{JOURNEY.map((label, index) => <View key={label} style={styles.journeyItem}><View style={[styles.journeyDot, index <= active && styles.journeyDotActive]} /><Text style={[styles.journeyLabel, index === active && styles.journeyLabelActive]}>{label}</Text></View>)}</View>;
 }
 
 function capabilityLabel(capabilityId: string) {
@@ -666,6 +756,14 @@ function capabilityLabel(capabilityId: string) {
     'maps.route.estimate': '路线估算',
     'system.reminder.schedule': '提醒',
   } as Record<string, string>)[capabilityId] ?? capabilityId;
+}
+
+function capabilityReality(capabilityId: string) {
+  return ({
+    'system.calendar.createEvent': '真实写入设备 Calendar',
+    'maps.route.estimate': '真实调用 Routes API',
+    'system.reminder.schedule': '真实创建本地通知',
+  } as Record<string, string>)[capabilityId] ?? '已注册 capability';
 }
 
 function summarizeStepInput(input: Record<string, unknown>) {
@@ -713,14 +811,20 @@ const styles = StyleSheet.create({
   flex: { flex: 1 }, screen: { flex: 1, backgroundColor: '#f4f5f8' }, center: { alignItems: 'center', justifyContent: 'center' },
   intakeContent: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 52, paddingBottom: 30 }, brand: { color: '#1266fa', fontSize: 12, fontWeight: '800', letterSpacing: 1.4 },
   authContent: { flex: 1, paddingHorizontal: 24, paddingTop: 72 }, authInput: { minHeight: 58, marginTop: 16, paddingHorizontal: 18, borderRadius: 18, backgroundColor: '#e5e8ee', color: '#171a20', fontSize: 16 },
-  intakeTitle: { marginTop: 18, maxWidth: 330, color: '#111318', fontSize: 34, lineHeight: 40, fontWeight: '700' }, intakeSubtitle: { marginTop: 12, color: '#626974', fontSize: 16, lineHeight: 24 },
-  sourceInput: { minHeight: 230, marginTop: 28, padding: 18, borderRadius: 24, backgroundColor: '#171a20', color: '#f5f6f9', fontSize: 16, lineHeight: 24, textAlignVertical: 'top' },
+  intakeTitle: { marginTop: 18, maxWidth: 340, color: '#111318', fontSize: 34, lineHeight: 40, fontWeight: '700' }, intakeSubtitle: { marginTop: 12, color: '#626974', fontSize: 16, lineHeight: 24 },
+  entryTabs: { marginTop: 24, padding: 4, borderRadius: 18, backgroundColor: '#e5e8ee', flexDirection: 'row' }, entryTab: { flex: 1, minHeight: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }, entryTabSelected: { backgroundColor: '#fff' }, entryTabText: { color: '#747b86', fontSize: 14, fontWeight: '600' }, entryTabTextSelected: { color: '#171a20' },
+  fieldLabel: { marginTop: 18, marginBottom: 8, color: '#626974', fontSize: 13, fontWeight: '700' }, goalInput: { minHeight: 58, paddingHorizontal: 18, borderRadius: 18, backgroundColor: '#fff', borderWidth: 1, borderColor: '#d9dde5', color: '#171a20', fontSize: 16 },
+  sourceInput: { minHeight: 190, padding: 18, borderRadius: 24, backgroundColor: '#171a20', color: '#f5f6f9', fontSize: 16, lineHeight: 24, textAlignVertical: 'top' }, contextInput: { minHeight: 170 },
+  demoSection: { marginTop: 18 }, demoLabel: { color: '#626974', fontSize: 13, fontWeight: '700' }, demoRow: { marginTop: 8, flexDirection: 'row', gap: 10 }, demoCard: { flex: 1, minHeight: 68, paddingHorizontal: 14, borderRadius: 18, backgroundColor: '#e7eaf0', justifyContent: 'center' }, demoTitle: { color: '#20242b', fontSize: 14, fontWeight: '700' }, demoDetail: { marginTop: 3, color: '#777e89', fontSize: 11 },
   privacyHint: { marginTop: 14, color: '#7b818b', fontSize: 12, lineHeight: 18 }, primary: { minHeight: 58, marginTop: 18, borderRadius: 29, backgroundColor: '#1266fa', alignItems: 'center', justifyContent: 'center' }, primaryLabel: { color: '#fff', fontSize: 16, fontWeight: '700' }, pressed: { opacity: 0.82 }, disabled: { opacity: 0.45 },
   secondary: { minHeight: 52, marginTop: 10, borderRadius: 26, borderWidth: 1, borderColor: '#c5cad3', alignItems: 'center', justifyContent: 'center' }, secondaryLabel: { color: '#4f5662', fontSize: 14, fontWeight: '600' },
   originInput: { minHeight: 56, marginTop: 12, paddingHorizontal: 18, borderRadius: 18, backgroundColor: '#e5e8ee', color: '#171a20', fontSize: 15 },
   island: { alignSelf: 'center', width: 330, height: 48, marginTop: 8, paddingHorizontal: 14, borderRadius: 24, backgroundColor: '#111214', flexDirection: 'row', alignItems: 'center', gap: 8 }, dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ff615c' }, islandLabel: { flex: 1, color: '#f7f7fa', fontSize: 12, fontWeight: '600' }, islandState: { color: '#ff8a83', fontSize: 11, fontWeight: '600' }, stop: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#ff8a35', alignItems: 'center', justifyContent: 'center' }, stopGlyph: { color: '#fff', fontSize: 11 },
-  content: { padding: 20, paddingBottom: 150 }, taskHeader: { marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 }, eyebrow: { color: '#717784', fontSize: 13, fontWeight: '600' }, newTask: { color: '#1266fa', fontSize: 14, fontWeight: '600' }, dataActions: { marginTop: 12, marginBottom: 12, paddingVertical: 12, gap: 14, alignItems: 'center' }, deleteAccount: { color: '#a23b32', fontSize: 13, textDecorationLine: 'underline' }, deleteAccountStandalone: { marginTop: 24, color: '#a23b32', fontSize: 13, textAlign: 'center', textDecorationLine: 'underline' }, signOut: { color: '#717784', fontSize: 14 }, title: { marginTop: 18, color: '#111318', fontSize: 28, lineHeight: 34, fontWeight: '700' }, subtitle: { marginTop: 6, marginBottom: 20, color: '#69707b', fontSize: 15, lineHeight: 22 }, notice: { marginTop: 12, marginBottom: 14, color: '#a23b32', fontSize: 13, lineHeight: 19 },
-  activity: { marginBottom: 18, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#e7eaf0' }, activityRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#c9ced8' }, activityStatus: { width: 22, color: '#1266fa', fontSize: 17, textAlign: 'center', fontWeight: '700' }, activityCopy: { flex: 1 }, activityTitle: { color: '#20242b', fontSize: 14, fontWeight: '600' }, activityDetail: { marginTop: 2, color: '#6f7580', fontSize: 12 },
+  content: { padding: 20, paddingBottom: 150 }, taskHeader: { marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 }, eyebrow: { color: '#717784', fontSize: 13, fontWeight: '600' }, newTask: { color: '#1266fa', fontSize: 14, fontWeight: '600' }, dataActions: { marginTop: 12, marginBottom: 12, paddingVertical: 12, gap: 14, alignItems: 'center' }, deleteAccount: { color: '#a23b32', fontSize: 13, textDecorationLine: 'underline' }, deleteAccountStandalone: { marginTop: 24, color: '#a23b32', fontSize: 13, textAlign: 'center', textDecorationLine: 'underline' }, signOut: { color: '#717784', fontSize: 14 },
+  journey: { marginTop: 18, flexDirection: 'row', justifyContent: 'space-between' }, journeyItem: { flex: 1, alignItems: 'center' }, journeyDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#cbd0d9' }, journeyDotActive: { backgroundColor: '#1266fa' }, journeyLabel: { marginTop: 5, color: '#9aa0aa', fontSize: 9 }, journeyLabelActive: { color: '#1266fa', fontWeight: '700' },
+  title: { marginTop: 18, color: '#111318', fontSize: 28, lineHeight: 34, fontWeight: '700' }, subtitle: { marginTop: 6, marginBottom: 20, color: '#69707b', fontSize: 15, lineHeight: 22 }, notice: { marginTop: 12, marginBottom: 14, color: '#a23b32', fontSize: 13, lineHeight: 19 },
+  executionBoundary: { marginBottom: 16, padding: 14, borderRadius: 18, borderWidth: 1, borderColor: '#d5dae3', backgroundColor: '#fff' }, executionBoundaryTitle: { color: '#20242b', fontSize: 12, fontWeight: '800' }, executionBoundaryText: { marginTop: 5, color: '#1266fa', fontSize: 13, lineHeight: 18, fontWeight: '700' }, executionBoundaryHint: { marginTop: 5, color: '#777e89', fontSize: 11, lineHeight: 16 },
+  activity: { marginBottom: 18, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, backgroundColor: '#e7eaf0' }, activityHeading: { marginBottom: 5, color: '#626974', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 }, activityRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#c9ced8' }, activityStatus: { width: 22, color: '#1266fa', fontSize: 17, textAlign: 'center', fontWeight: '700' }, activityCopy: { flex: 1, paddingVertical: 8 }, activityTitle: { color: '#20242b', fontSize: 14, fontWeight: '600' }, activityDetail: { marginTop: 2, color: '#6f7580', fontSize: 12 }, receiptMeta: { marginTop: 3, color: '#8a909a', fontSize: 10 },
   row: { minHeight: 100, marginBottom: 12, padding: 16, borderRadius: 22, borderWidth: 1, borderColor: 'transparent', backgroundColor: '#171a20', flexDirection: 'row', alignItems: 'center', gap: 14 }, rowPressed: { opacity: 0.82, transform: [{ scale: 0.99 }] }, rowSelected: { borderColor: '#6da5ff', backgroundColor: '#192b45' }, rowIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#20304a', alignItems: 'center', justifyContent: 'center' }, rowIconText: { color: '#a8c8ff', fontSize: 20 }, rowCopy: { flex: 1, gap: 3 }, rowLabel: { color: '#939aa6', fontSize: 13 }, rowValue: { color: '#f4f6fa', fontSize: 20, lineHeight: 25, fontWeight: '700' }, rowDetail: { color: '#b2b8c2', fontSize: 14, lineHeight: 20 },
   composerLayer: { position: 'absolute', left: 0, right: 0, bottom: 0 }, composerRow: { marginHorizontal: 16, marginBottom: 18, flexDirection: 'row', alignItems: 'flex-end', gap: 10 }, composer: { flex: 1, minHeight: 58, maxHeight: 118, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 29, backgroundColor: 'rgba(31,33,39,0.96)', justifyContent: 'center' }, context: { alignSelf: 'flex-start', marginBottom: 3, color: '#a8c8ff', fontSize: 12, fontWeight: '600' }, input: { minHeight: 24, maxHeight: 66, color: '#f5f6f9', fontSize: 16 }, send: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#e9f0ff', alignItems: 'center', justifyContent: 'center' }, sendGlyph: { color: '#1266fa', fontSize: 29, lineHeight: 31, fontWeight: '400' },
 });

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-19 — Operable intent-to-receipt experience
+
+- Split native intake into direct-intent and current-context entry modes without changing the orchestration kernel.
+- Added visible dinner-from-group-chat and interview-from-email sample inputs; samples still use the real planner rather than hard-coded plans.
+- Added a visible Intent → Plan → Decision → Review → Execution → Receipt journey indicator and an explicit registered-capability execution boundary.
+- Connected Review row edits to generic re-planning and task revisioning instead of presenting a non-functional edit affordance.
+- Promoted Task Activity into a receipt view with saved completion timestamps and real-vs-unavailable capability language.
+- Added a physical-device walkthrough for both scenarios and documented every real and sample boundary.
+
 ## 2026-09-19 — Layered execution policy and receipt bindings
 
 - Added constrained receipt-to-input bindings so a capability step can consume a declared top-level output from a direct dependency without scenario-specific executor logic.
