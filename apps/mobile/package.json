@@ -30,7 +30,7 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "test:domain": "tsx --test src/domain/*.test.ts src/capabilities/*.test.ts src/storage/*.test.ts src/api/*.test.ts src/native/*.test.ts src/observability/*.test.ts",
+    "test:domain": "tsx --test src/domain/*.test.ts src/scenarios/*.test.ts src/capabilities/*.test.ts src/storage/*.test.ts src/api/*.test.ts src/native/*.test.ts src/observability/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "private": true

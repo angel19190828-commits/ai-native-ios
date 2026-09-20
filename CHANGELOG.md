@@ -10,8 +10,9 @@
 - Connected the default mobile intake to direct Goal + Context planning while retaining the invitation extractor as an explicit reference path; Android shared text is persisted as `shared-content` context.
 - Made generic plan rows render from capability metadata and replaced the hard-coded completion message with task-neutral execution feedback.
 - Removed the reminder adapter's dependency on a step literally named `commute`; it now consumes typed route output from any dependency receipt.
+- Connected required decisions to persistent re-planning: an answer creates a new task revision, retains prior context and history, can request another decision, and restores the pending decision if the planner fails.
 - Allowed the generic compiler to persist a `needs_decision` task with zero executable steps instead of inventing placeholder actions.
-- Expanded API coverage to 25 tests and mobile coverage to 54 tests.
+- Expanded API coverage to 25 tests and mobile coverage to 56 tests.
 
 ## 2026-09-19 — Intent-driven orchestration pivot
 

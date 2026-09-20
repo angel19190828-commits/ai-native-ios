@@ -44,6 +44,7 @@ for (const file of [
   'src/domain/orchestration.ts',
   'src/domain/planCompiler.ts',
   'src/scenarios/invitation.ts',
+  'src/scenarios/generic.ts',
   'src/api/orchestratorClient.ts',
 ]) {
   check(fs.existsSync(path.join(mobile, file)), `${file} exists`);

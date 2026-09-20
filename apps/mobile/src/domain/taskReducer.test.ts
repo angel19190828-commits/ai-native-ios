@@ -133,3 +133,21 @@ test('step events reject unknown, duplicate, and post-stop transitions', () => {
     /blocked after stop is requested/,
   );
 });
+
+test('decision re-planning creates a new revision and can safely request another decision', () => {
+  let task = structuredClone(interviewTask);
+  task = apply(task, { type: 'decision.required', at, decision: { id: 'where', prompt: 'Where?', options: [] } });
+  task = apply(task, { type: 'decision.resolved', at });
+  assert.equal(task.phase, 'planning');
+  task = apply(task, {
+    type: 'planning.ready', at, facts: task.facts, steps: task.steps,
+    goal: { id: 'dinner', summary: 'Plan dinner', desiredOutcome: 'Dinner arranged' },
+    context: [{ id: 'answer', kind: 'direct-input', data: { content: 'Downtown' } }],
+    triggers: [{ id: 'manual', kind: 'manual', configuration: {} }],
+  });
+  assert.equal(task.revision, 2);
+  assert.equal(task.goal?.id, 'dinner');
+  task = apply(task, { type: 'decision.required', at, decision: { id: 'when', prompt: 'When?', options: [] } });
+  assert.equal(task.phase, 'needs_decision');
+  assert.equal(task.pendingDecision?.id, 'when');
+});

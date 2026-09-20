@@ -14,6 +14,7 @@ import { Task, TaskEvent } from './src/domain/task';
 import { createTaskFromPlan } from './src/domain/taskFactory';
 import { createTaskFromDefinition } from './src/domain/planCompiler';
 import { taskReducer } from './src/domain/taskReducer';
+import { genericProposalToPlanDefinition } from './src/scenarios/generic';
 import { clearLocalAuthSession, currentSession, getAccessToken, getSupabaseClient, isAuthConfigured, requestEmailCode, signOut, startAuthAutoRefresh, verifyEmailCode } from './src/auth/supabaseAuth';
 import { createEncryptedTaskStore, deleteTaskEncryptionKey } from './src/storage/nativeStores';
 import { TaskCache } from './src/storage/taskCache';
@@ -259,30 +260,9 @@ function App() {
       ];
       const response = await traceOperation('task.plan', 'ai.plan', () => orchestratorClient.propose({ goal, context, locale, timeZone }));
       const now = new Date().toISOString();
-      const calendarInput = response.proposal.steps.find((step) => step.capabilityId === 'system.calendar.createEvent')?.input;
-      const routeInput = response.proposal.steps.find((step) => step.capabilityId === 'maps.route.estimate')?.input;
-      const reminderInput = response.proposal.steps.find((step) => step.capabilityId === 'system.reminder.schedule')?.input;
-      const startsAt = typeof calendarInput?.startDate === 'string'
-        ? calendarInput.startDate
-        : typeof reminderInput?.eventStartsAt === 'string' ? reminderInput.eventStartsAt : now;
-      const preparation = Array.isArray(reminderInput?.preparation)
-        ? reminderInput.preparation.filter((item): item is string => typeof item === 'string') : [];
       const proposedTask = createTaskFromDefinition({
         id: Crypto.randomUUID(), request: goal, now,
-        plan: {
-          goal: { id: 'general-intent', summary: response.proposal.summary, desiredOutcome: response.proposal.desiredOutcome },
-          context: context.map((item) => ({ id: item.id, kind: item.kind, title: item.title, data: { content: item.content } })),
-          triggers: response.proposal.triggers,
-          decisions: response.proposal.decisions,
-          steps: response.proposal.steps,
-          presentation: {
-            title: response.proposal.summary,
-            startsAt,
-            address: typeof calendarInput?.location === 'string' ? calendarInput.location : typeof routeInput?.destination === 'string' ? routeInput.destination : '',
-            preparation,
-            origin: origin.trim() || undefined,
-          },
-        },
+        plan: genericProposalToPlanDefinition({ request: goal, proposal: response.proposal, context, now, origin: origin.trim() || undefined }),
       });
       const nextTask = await saveSnapshot(proposedTask, { type: 'task.created', at: now });
       await AsyncStorage.setItem(lastTaskKey, nextTask.id);
@@ -295,6 +275,73 @@ function App() {
       const code = error instanceof AiApiError ? error.code : 'unknown';
       captureOperationalError(`orchestrator_plan_${code}`, { phase: 'planning', operation: 'ai.plan' });
       setNotice(`目标规划失败（${code}）。你的输入仍保留，可以重试。`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitDecision = async () => {
+    if (!task?.pendingDecision) return;
+    const answer = draft.trim();
+    if (!answer || answer === '按这个安排') return setNotice('先回答当前问题，再发送。');
+    if (!apiBaseUrl) return setNotice('尚未配置 API，无法继续规划。');
+    setBusy(true);
+    setNotice(undefined);
+    try {
+      const at = new Date().toISOString();
+      let planning = await appendEvent(task.id, { type: 'decision.resolved', at });
+      setTask(planning);
+      let candidate: Task;
+      if (task.goal?.id === 'general-intent') {
+        const priorContext: OrchestrationContextInput[] = (task.context ?? []).map((item) => ({
+          id: item.id, kind: item.kind, sourceApp: item.sourceApp, title: item.title,
+          content: typeof item.data.content === 'string' ? item.data.content : JSON.stringify(item.data),
+        }));
+        const decisionContext: OrchestrationContextInput = {
+          id: `decision-${task.revision + 1}`, kind: 'direct-input', title: task.pendingDecision.prompt,
+          content: answer,
+        };
+        const context = [...priorContext, decisionContext];
+        const response = await traceOperation('task.replan', 'ai.plan', () => orchestratorClient.propose({
+          goal: task.goal?.summary ?? task.request,
+          context,
+          locale: Intl.DateTimeFormat().resolvedOptions().locale || 'zh-CN',
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        }));
+        candidate = createTaskFromDefinition({
+          id: task.id, request: task.request, now: at,
+          plan: genericProposalToPlanDefinition({ request: task.request, proposal: response.proposal, context, now: at, origin: task.facts.origin }),
+        });
+      } else {
+        const response = await traceOperation('task.replan', 'ai.plan', () => aiClient.planInvitation({
+          sourceText: task.request,
+          locale: Intl.DateTimeFormat().resolvedOptions().locale || 'zh-CN',
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        }));
+        candidate = createTaskFromPlan({ id: task.id, request: task.request, plan: response.plan, now: at, origin: answer });
+      }
+      planning = await appendEvent(planning.id, {
+        type: 'planning.ready', at, facts: candidate.facts, steps: candidate.steps,
+        goal: candidate.goal, context: candidate.context, triggers: candidate.triggers,
+      });
+      if (candidate.pendingDecision) {
+        planning = await appendEvent(planning.id, { type: 'decision.required', at, decision: candidate.pendingDecision });
+      }
+      setTask(planning);
+      setDraft('按这个安排');
+      setSelectedContext(undefined);
+      setNotice(candidate.pendingDecision?.prompt ?? '已根据你的回答更新计划，请重新审阅。');
+    } catch (error) {
+      const code = error instanceof AiApiError ? error.code : 'unknown';
+      captureOperationalError(`decision_replan_${code}`, { phase: 'planning', operation: 'task.replan' });
+      try {
+        const restored = await appendEvent(task.id, { type: 'decision.required', at: new Date().toISOString(), decision: task.pendingDecision });
+        setTask(restored);
+        setNotice(`继续规划失败（${code}）。你的回答仍保留，可以重试。`);
+      } catch {
+        captureOperationalError('decision_restore_failed', { phase: 'planning', operation: 'task.replan' });
+        setNotice('继续规划失败，并且无法恢复决定状态。尚未确认或执行任何新操作，请重新载入任务。');
+      }
     } finally {
       setBusy(false);
     }
@@ -589,9 +636,9 @@ function App() {
         <View style={styles.composerRow}>
           <View style={styles.composer}>
             {selectedContext ? <Pressable onPress={() => setSelectedContext(undefined)}><Text style={styles.context}>{selectedContext}　×</Text></Pressable> : null}
-            <TextInput style={styles.input} value={draft} onChangeText={setDraft} placeholder="告诉 AI 想怎么改…" placeholderTextColor="#8e949f" multiline maxLength={1000} />
+            <TextInput style={styles.input} value={draft} onChangeText={setDraft} placeholder={task.phase === 'needs_decision' ? '回答当前问题…' : '告诉 AI 想怎么改…'} placeholderTextColor="#8e949f" multiline maxLength={1000} />
           </View>
-          <Pressable disabled={busy || task.phase === 'completed' || task.phase === 'stopped' || task.phase === 'executing'} accessibilityRole="button" accessibilityLabel="发送并确认" onPress={task.confirmedPlan ? () => executeConfirmedTask(task) : confirmPlan} style={({ pressed }) => [styles.send, pressed && styles.pressed, (busy || task.phase === 'completed' || task.phase === 'stopped' || task.phase === 'executing') && styles.disabled]}>
+          <Pressable disabled={busy || task.phase === 'completed' || task.phase === 'stopped' || task.phase === 'executing'} accessibilityRole="button" accessibilityLabel={task.phase === 'needs_decision' ? '发送回答' : '发送并确认'} onPress={task.phase === 'needs_decision' ? submitDecision : task.confirmedPlan ? () => executeConfirmedTask(task) : confirmPlan} style={({ pressed }) => [styles.send, pressed && styles.pressed, (busy || task.phase === 'completed' || task.phase === 'stopped' || task.phase === 'executing') && styles.disabled]}>
             {busy ? <ActivityIndicator color="#1266fa" /> : <Text style={styles.sendGlyph}>↑</Text>}
           </Pressable>
         </View>

@@ -181,13 +181,15 @@ The mobile `OrchestratorApiClient` validates the returned envelope again before 
 
 The App intake now defaults to this generic endpoint: users can state a goal directly or arrive with shared text, which is preserved as typed `direct-input` or `shared-content` context. The invitation extractor remains available as an explicit reference path. Generic proposals are compiled, persisted, confirmed, executed, stopped, recovered, and receipted through the same task kernel. During compatibility migration, the App derives a temporary presentation projection from capability inputs so the existing review shell can render the plan.
 
+Required decisions use the same persistent task rather than starting a chat-only side flow. Sending an answer records `decision.resolved`, calls the appropriate planner with prior minimized context plus the answer, records `planning.ready` as a new revision, and either returns to review or persists another `decision.required`. If re-planning fails, the decision is restored before any confirmation or execution can occur.
+
 ## Next generalization milestone
 
 The next milestone is to remove the remaining presentation compatibility layer and ship a second real vertical slice. It must:
 
 1. replace `TaskFacts` with scenario-independent task summary/projection records and migrate older encrypted/server snapshots;
-2. collect and re-plan typed decisions without discarding task history;
-3. add one real non-invitation capability (for example Notes append or restaurant search) with server/device execution and receipts;
+2. add structured decision answer schemas instead of treating every answer as free text;
+3. add one real non-invitation capability (for example restaurant search) with server/device execution and receipts;
 4. add source-app metadata where platform share contracts expose it;
 5. prove the second scenario on physical iOS and Android devices while keeping the invitation adapter operational.
 
