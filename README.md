@@ -2,6 +2,8 @@
 
 一个概念设计项目:探索当 AI 成为 iOS 的系统基础能力后,系统如何把用户当前看到的信息或表达的目标,转化为清晰、可执行、可追踪的跨应用任务计划。
 
+> 当前正在从概念原型推进为跨平台内测 MVP。网页 prototype 继续作为交互规格；`apps/mobile` 是独立的 Expo/React Native iOS 与 Android 应用工程，不是 WebView 包装。
+
 场景:用户收到一封邀请/通知邮件(面试、线上会议、账单截止……),系统识别其中的时间、地点、联系人和准备要求,生成一个可查看、可修改、可执行、可撤销的任务计划,横跨日历、地图、提醒事项、文件与信息 App。
 
 ## 快速入口
@@ -11,6 +13,32 @@
 | **Interactive Demo**(真实 Gemini AI 解析) | [prototype/wireframes-high-fidelity.html](prototype/wireframes-high-fidelity.html) · 线上:https://angel19190828-commits.github.io/ai-native-ios/prototype/wireframes-high-fidelity.html |
 | **Case Study** | [prototype/case-study.html](prototype/case-study.html) · 线上:https://angel19190828-commits.github.io/ai-native-ios/prototype/case-study.html |
 | Demo Video | 尚未制作 |
+
+## Mobile MVP（开发中）
+
+- 产品范围：[docs/MVP_SCOPE.md](docs/MVP_SCOPE.md)
+- 架构决策：[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- 插件清单 Schema：[docs/plugin-manifest.schema.json](docs/plugin-manifest.schema.json)
+- 移动端工程：[apps/mobile](apps/mobile)
+- 隐私数据地图：[docs/PRIVACY_DATA_MAP.md](docs/PRIVACY_DATA_MAP.md)
+
+```bash
+npm run mobile:start
+npm run mobile:android
+npm run mobile:test
+npm run mobile:typecheck
+npm run release:check:static
+```
+
+复制 `apps/mobile/.env.example` 为 `apps/mobile/.env.local`，填写 API 地址、Supabase URL 与 publishable key。`EXPO_PUBLIC_*` 会进入 App bundle，因此这里只能放公开配置，不能放 Gemini key、Supabase secret key 或静态生产 token。外部构建必须关闭 `EXPO_PUBLIC_ALLOW_GUEST`。
+
+EAS 构建配置位于 `apps/mobile/eas.json`，区分 development、preview/internal 与 production/store 三个环境。运行云构建前需先关联真实 EAS project，并在对应环境设置 `EXPO_PUBLIC_API_BASE_URL` 与 Supabase 公开配置；发布前检查会拒绝 guest mode、缺少 HTTPS API、账号配置、project ID、隐私政策或支持页面的构建。
+
+当前基线为 Expo SDK 57、React Native 0.86 和 TypeScript。iOS 原生构建仍需要 macOS/Xcode 或 EAS Build；App Intents、Share Extension 和需要原生权限的能力必须使用 development build/TestFlight，不能只靠 Expo Go 验证。
+
+移动端使用 Supabase email OTP 登录，刷新会话保存在系统 SecureStore；`POST /api/plan` 和 `POST /api/route` 接收短期 access token，并在服务端验证 JWT。计划由确定性代码生成 Calendar → 通勤 → Reminders 步骤；模型不能直接调用系统能力，也不能自行标记步骤完成。`MOBILE_API_TOKEN` 仅保留为本地开发回退，绝不能编译进 App。
+
+数据库基线位于 `supabase/migrations/202609190001_taskspace_core.sql`，为 tasks、append-only task events 与 devices 启用按 `auth.uid()` 隔离的 Row Level Security。`PUT /api/tasks` 会原子写入任务快照与审计事件，并使用 `syncVersion` 阻止旧设备覆盖新状态；登录后 App 优先恢复服务端最新任务，本地账号级 cache 只作离线回退。部署内测环境后仍须用两个真实测试账号验证跨账号读写被拒绝。
 
 直接用浏览器打开即可,无需安装、无需构建。本地打开时"AI 分析"功能需要额外起一个本地代理(见下方「本地运行」),线上版本已经连了部署好的后端,可以直接粘贴任意邮件文本试真实解析。
 
@@ -90,7 +118,8 @@ ALLOWED_ORIGIN=https://angel19190828-commits.github.io
 ## 技术栈
 
 - 纯 HTML + CSS + 原生 JavaScript,无前端框架、无构建步骤
-- 后端仅一个 Vercel Serverless Function(`api/extract.js`),无数据库、无用户账户系统
+- 网页原型仍使用 `api/extract.js`；移动端使用具备输入限制、认证门槛、超时和响应校验的 `api/plan.js`
+- 已有 Supabase 账户与数据库/RLS 基线；生产项目迁移、双账号隔离验证、账号删除与保留策略仍是外部内测前的发布门槛
 - Google Gemini API(`gemini-flash-latest`),结构化输出
 - 部署:GitHub Pages(静态前端)+ Vercel(API 代理)
 
@@ -102,6 +131,8 @@ ai-native-ios/
 ├── PROGRESS.md / PROTOTYPE-CHANGELOG.md   阶段进度与高保真迭代记录
 ├── api/
 │   └── extract.js                     Vercel serverless function,Gemini 代理
+├── apps/mobile/                        Expo/React Native 跨平台 MVP 工程
+├── docs/                               MVP 范围、架构与插件协议
 ├── research/                          研究阶段产出(七类系统入口审查、任务分析、研究发现等)
 ├── design/                            信息架构、状态机、用户流程、验证计划
 ├── slides/                            案例研究幻灯片(无内嵌图片)

@@ -1,0 +1,56 @@
+import { Task } from './task';
+
+export const interviewTask: Task = {
+  id: 'task-interview-demo',
+  request: '帮我安排 Alex 的面试邀请',
+  phase: 'ready',
+  revision: 1,
+  stopRequested: false,
+  updatedAt: '2026-09-19T17:00:00.000Z',
+  facts: {
+    title: '面试',
+    startsAt: '2026-07-28T10:30:00-07:00',
+    address: '555 Burrard Street',
+    preparation: ['携带作品集'],
+    origin: '1285 W Pender Street',
+    departureAt: '09:35',
+    arrivalAt: '10:07',
+    transportMode: 'transit',
+  },
+  steps: [
+    {
+      id: 'calendar',
+      capabilityId: 'system.calendar.createEvent',
+      title: '创建面试日历',
+      risk: 'write',
+      status: 'waiting',
+      dependsOn: [],
+      input: {
+        title: 'Alex 面试',
+        startDate: '2026-07-28T10:30:00-07:00',
+        endDate: '2026-07-28T11:30:00-07:00',
+        location: '555 Burrard Street',
+        notes: '携带作品集',
+        timeZone: 'America/Vancouver',
+      },
+    },
+    {
+      id: 'commute',
+      capabilityId: 'maps.route.estimate',
+      title: '启用通勤安排',
+      risk: 'read',
+      status: 'waiting',
+      dependsOn: ['calendar'],
+      input: {},
+    },
+    {
+      id: 'reminders',
+      capabilityId: 'system.reminder.schedule',
+      title: '设置准备和出发提醒',
+      risk: 'write',
+      status: 'waiting',
+      dependsOn: ['commute'],
+      input: {},
+    },
+  ],
+};

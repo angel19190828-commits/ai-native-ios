@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AI Native iOS · Figma 状态审核</title>
+  <style>
+    :root{color-scheme:dark;--bg:#090a0d;--panel:#12141a;--line:#282c35;--muted:#8d94a3;--text:#f5f7fb;--blue:#0a84ff;--stage:#e9eaee;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display",sans-serif}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);overflow:hidden}button{font:inherit;color:inherit}.shell{display:grid;grid-template-columns:292px 1fr;height:100vh}.rail{display:flex;flex-direction:column;border-right:1px solid var(--line);background:#0d0f14}.brand{padding:24px 20px 18px;border-bottom:1px solid var(--line)}.eyebrow{margin:0 0 7px;color:#74adff;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.brand h1{margin:0;font-size:20px;letter-spacing:-.02em}.brand p{margin:8px 0 0;color:var(--muted);font-size:12px;line-height:1.45}.nav{padding:14px 10px 24px;overflow:auto}.group{margin:0 0 16px}.group-title{padding:4px 10px 7px;color:#697181;font-size:11px;font-weight:700;letter-spacing:.08em}.screen-btn{width:100%;display:flex;gap:10px;align-items:center;border:0;border-radius:10px;background:transparent;padding:9px 10px;text-align:left;cursor:pointer}.screen-btn:hover{background:#181b22}.screen-btn.active{background:#17263b;color:#fff;box-shadow:inset 0 0 0 1px #245188}.num{width:30px;color:#75aaff;font-size:11px;font-variant-numeric:tabular-nums}.label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}.main{display:grid;grid-template-rows:68px 1fr;background:var(--stage)}.toolbar{display:flex;align-items:center;justify-content:space-between;padding:0 22px;background:#111319;border-bottom:1px solid var(--line)}.identity{min-width:0}.identity strong{display:block;font-size:15px}.identity span{color:var(--muted);font-size:11px}.tools{display:flex;gap:8px}.tool{min-width:38px;height:36px;border:1px solid #343943;border-radius:9px;background:#1a1d24;padding:0 11px;cursor:pointer}.tool:hover{border-color:#596170}.tool.primary{background:var(--blue);border-color:var(--blue)}.viewer{position:relative;display:grid;place-items:center;overflow:auto;padding:36px}.phone{position:relative;flex:none;width:393px;height:852px;border-radius:44px;background:#fff;box-shadow:0 30px 80px #16192235,0 0 0 1px #0002;overflow:hidden;transform-origin:center center}.phone img{display:block;width:393px;height:852px;object-fit:contain}.viewer.fit .phone{transform:scale(var(--fit,.75))}.hint{position:fixed;right:20px;bottom:16px;color:#737b89;font-size:11px;background:#111319d9;border:1px solid var(--line);border-radius:999px;padding:7px 11px;backdrop-filter:blur(10px)}
+    @media(max-width:800px){.shell{grid-template-columns:1fr}.rail{display:none}.toolbar{padding:0 12px}.viewer{padding:18px}.hint{display:none}}
+    .main{grid-template-rows:68px minmax(0,1fr);min-height:0;height:100vh;overflow:hidden}.viewer{min-height:0}.phone-slot{width:393px;height:852px;flex:none}.viewer.fit .phone-slot{width:calc(393px * var(--fit,.75));height:calc(852px * var(--fit,.75))}.viewer.fit .phone{transform:scale(var(--fit,.75));transform-origin:top left;zoom:1}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail">
+      <div class="brand"><p class="eyebrow">Figma review build</p><h1>AI Native iOS</h1><p>41 个当前实际存在的产品状态<br>逐屏检查字体、颜色、布局与层级</p></div>
+      <nav class="nav" id="nav"></nav>
+    </aside>
+    <main class="main">
+      <header class="toolbar">
+        <div class="identity"><strong id="title"></strong><span id="meta"></span></div>
+        <div class="tools"><button class="tool" id="prev" aria-label="上一屏">←</button><button class="tool" id="next" aria-label="下一屏">→</button><button class="tool primary" id="zoom">适应窗口</button></div>
+      </header>
+      <section class="viewer fit" id="viewer"><div class="phone-slot"><div class="phone"><img id="screen" alt="Figma prototype screen"></div></div></section>
+    </main>
+  </div>
+  <div class="hint">← → 切换画面 · F 切换缩放 · URL hash 可分享当前状态</div>
+  <script>
+    const groups=[
+      {name:'A · 主流程',items:[['01','发现邀请','62:3'],['02','AI 助手','62:66'],['03','规划前确认','62:161'],['04','AI 规划中','62:277'],['05','分析结果','62:390'],['06','需要决定','62:526'],['07','处理方式','156:766'],['11','最终计划','159:806'],['15','正在写入','62:1583'],['17','系统设置已完成','62:1812']]},
+      {name:'B · 调整与偏好',items:[['08','改期草稿','62:746'],['09','通勤建议','62:849'],['10','调整通勤','62:959'],['10A','选择出发地点','125:454'],['10B','选择交通方式','125:507'],['12','调整计划','62:1237'],['13','日历设置','62:1346'],['14','提醒设置','62:1460'],['21','提醒偏好','62:2304']]},
+      {name:'C · 任务与系统入口',items:[['18','任务菜单','62:1962'],['19','来源与权限','160:862'],['20','通知设置','62:2199'],['22','主屏提醒','62:2443'],['23','路线详情','62:2523'],['31','第三方能力','62:3128']]},
+      {name:'D · 面试当天',items:[['24','面试当天','62:2640'],['25','导航中','62:2695'],['26','导航完成','62:2733']]},
+      {name:'E · 异常与恢复',items:[['16','部分完成','62:1689'],['27','草稿已保存','62:2771'],['28','任务已暂停','62:2862'],['29','缺少信息','62:2926'],['30','信息摘要','62:3018'],['32','确认停止','62:3236'],['33','已停止','62:3330'],['34','确认撤销','62:3412'],['35','已撤销','62:3499']]},
+      {name:'F · 对话输入状态',items:[['36','键盘展开','125:567'],['37','多选要求','125:621'],['38','语音待命','149:668'],['38A','语音输入中','149:776']]}
+    ];
+    const items=groups.flatMap(g=>g.items.map(x=>({key:x[0],name:x[1],node:x[2],group:g.name})));
+    const nav=document.querySelector('#nav'),img=document.querySelector('#screen'),viewer=document.querySelector('#viewer');let current=0;
+    groups.forEach(g=>{const section=document.createElement('section');section.className='group';section.innerHTML=`<div class="group-title">${g.name}</div>`;g.items.forEach(x=>{const b=document.createElement('button');b.className='screen-btn';b.dataset.key=x[0];b.innerHTML=`<span class="num">${x[0]}</span><span class="label">${x[1]}</span>`;b.onclick=()=>show(items.findIndex(i=>i.key===x[0]));section.appendChild(b)});nav.appendChild(section)});
+    function fit(){const w=viewer.clientWidth-72,h=viewer.clientHeight-72,scale=Math.min(1,w/393,h/852);viewer.style.setProperty('--fit',scale.toFixed(3));const slot=document.querySelector('.phone-slot');if(viewer.classList.contains('fit')){slot.style.width=`${393*scale}px`;slot.style.height=`${852*scale}px`}else{slot.style.width='393px';slot.style.height='852px'}}
+    function show(index){current=(index+items.length)%items.length;const s=items[current];img.src=`figma-review-assets/screen-${s.key}.png`;img.alt=`${s.key} · ${s.name}`;document.querySelector('#title').textContent=`${s.key} · ${s.name}`;document.querySelector('#meta').textContent=`${s.group} · Figma ${s.node}`;document.querySelectorAll('.screen-btn').forEach(b=>b.classList.toggle('active',b.dataset.key===s.key));history.replaceState(null,'',`#${s.key}`);document.querySelector('.screen-btn.active')?.scrollIntoView({block:'nearest'})}
+    document.querySelector('#prev').onclick=()=>show(current-1);document.querySelector('#next').onclick=()=>show(current+1);document.querySelector('#zoom').onclick=e=>{viewer.classList.toggle('fit');e.currentTarget.textContent=viewer.classList.contains('fit')?'适应窗口':'100%';fit()};
+    addEventListener('resize',fit);addEventListener('keydown',e=>{if(e.key==='ArrowLeft')show(current-1);if(e.key==='ArrowRight')show(current+1);if(e.key.toLowerCase()==='f')document.querySelector('#zoom').click()});fit();const initial=items.findIndex(x=>x.key===location.hash.slice(1));show(initial<0?0:initial);
+  </script>
+</body>
+</html>

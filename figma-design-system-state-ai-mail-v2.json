@@ -1,0 +1,99 @@
+{
+  "runId": "ai-mail-native-rebuild-2026-09-06",
+  "fileKey": "pVzyzRZgFRueovejbHUnDT",
+  "phase": "phase3",
+  "step": "representative-families-ready-for-review",
+  "scope": {
+    "screens": 51,
+    "device": "393x852",
+    "components": [
+      "Button",
+      "Pill",
+      "Dynamic Island",
+      "AI Avatar",
+      "Composer",
+      "Information Card",
+      "Status Row",
+      "Floating Conversation Panel",
+      "Device Screen"
+    ]
+  },
+  "entities": {
+    "collections": {
+      "primitives": "VariableCollectionId:80:4",
+      "color": "VariableCollectionId:80:5",
+      "dimensions": "VariableCollectionId:80:6",
+      "typography": "VariableCollectionId:80:7"
+    },
+    "pages": {
+      "designSystem": "81:3",
+      "screens": "62:2",
+      "archive": "0:1"
+    },
+    "frames": {
+      "foundations": "81:4",
+      "componentsSection": "81:175",
+      "coverageMatrix": "115:117",
+      "systemInteractionSection": "114:281"
+    },
+    "components": {
+      "aiAvatar": "82:2",
+      "iconChevronLeft": "91:4",
+      "navigationBack": "91:5",
+      "aiMessageHeader": "92:3",
+      "permissionBadgeSet": "92:17",
+      "capabilityBadgeSet": "92:24",
+      "iconChevronRight": "92:27",
+      "sourceRow": "92:28",
+      "appCapabilityRow": "92:39",
+      "routeSummary": "92:46",
+      "routeTimelineStep": "92:54",
+      "buttonSet": "92:69",
+      "floatingConversationPanelSet": "92:316",
+      "dynamicIslandAITaskSet": "116:147",
+      "composerSet": "117:166",
+      "quickSelectionPillSet": "118:123",
+      "commuteSummary": "119:117",
+      "commuteSettingRow": "119:285",
+      "singleSelectionRowSet": "119:299",
+      "conversationPanelSet": "120:194",
+      "commutePanelSet": "121:258",
+      "executingPanel": "122:225",
+      "mailDeviceContext": "123:230"
+    },
+    "representativeScreens": {
+      "04": "62:277",
+      "06": "62:526",
+      "09": "62:849",
+      "10": "62:959",
+      "10A": "125:454",
+      "10B": "125:507",
+      "36": "125:567",
+      "37": "125:621"
+    },
+    "styles": {
+      "text": ["AI/Caption", "AI/Body", "AI/Body Medium", "AI/Label", "AI/Title", "AI/Display"],
+      "effect": ["AI/Elevation Card", "AI/Elevation Panel"]
+    }
+  },
+  "pendingValidations": ["user-review/representative-families", "remaining-screens/migration"],
+  "completedSteps": [
+    "phase0",
+    "phase1",
+    "phase2",
+    "phase3/ai-avatar-created",
+    "phase3/shared-components",
+    "phase3/floating-panel-variants",
+    "phase3/target-screen-instances",
+    "phase3/global-back-navigation-cleanup",
+    "phase4/screenshot-qa",
+    "phase4/prototype-navigation",
+    "phase4/changelog",
+    "coverage/51-state-matrix",
+    "phase3/representative-components",
+    "phase3/representative-screens",
+    "phase3/representative-prototype-links",
+    "phase3/representative-100-percent-qa"
+  ],
+  "blocker": null
+}

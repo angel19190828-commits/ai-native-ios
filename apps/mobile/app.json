@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "Taskspace AI",
+    "slug": "taskspace-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "taskspace",
+    "userInterfaceStyle": "dark",
+    "plugins": [
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "允许 Taskspace 检查日程冲突并按你确认的计划管理日历。",
+          "writeOnlyCalendarPermission": "允许 Taskspace 将你确认的安排写入日历。",
+          "remindersPermission": "允许 Taskspace 设置你确认的准备与出发提醒。",
+          "writeOnlyAccess": true
+        }
+      ],
+      "expo-secure-store",
+      "expo-notifications",
+      [
+        "expo-build-properties",
+        {
+          "ios": { "deploymentTarget": "16.4" }
+        }
+      ],
+      "./plugins/withTaskspaceAndroidIntegrations"
+    ],
+    "experiments": {
+      "inlineModules": { "watchedDirectories": ["app-intents"] }
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ontingyu.taskspace",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.ontingyu.taskspace",
+      "permissions": ["SCHEDULE_EXACT_ALARM"],
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
