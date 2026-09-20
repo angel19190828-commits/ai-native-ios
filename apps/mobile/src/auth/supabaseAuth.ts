@@ -73,7 +73,12 @@ export async function signOut() {
   if (error) throw error;
 }
 
+export async function clearLocalAuthSession() {
+  if (!isAuthConfigured()) return;
+  const { error } = await getSupabaseClient().auth.signOut({ scope: 'local' });
+  if (error) throw error;
+}
+
 export async function getAccessToken() {
   return (await currentSession())?.access_token;
 }
-

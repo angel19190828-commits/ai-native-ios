@@ -3,7 +3,7 @@ const test = require('node:test');
 const { createHandler } = require('./tasks');
 
 function response() {
-  return { statusCode: 200, payload: undefined, status(code) { this.statusCode = code; return this; }, json(payload) { this.payload = payload; return this; } };
+  return { statusCode: 200, payload: undefined, ended: false, status(code) { this.statusCode = code; return this; }, json(payload) { this.payload = payload; return this; }, end() { this.ended = true; return this; } };
 }
 
 const task = {
@@ -42,4 +42,28 @@ test('returns a version conflict without overwriting', async () => {
   try { await handler({ method: 'PUT', body: { task: { ...task, syncVersion: 2 } } }, res); } finally { Object.assign(process.env, previous); }
   assert.equal(res.statusCode, 409);
   assert.equal(res.payload.error.code, 'task_version_conflict');
+});
+
+test('deletes only the authenticated users task selected by id', async () => {
+  let deletedId;
+  const client = { from() { return { delete() { return { async eq(_column, id) { deletedId = id; return { count: 1 }; } }; } }; } };
+  const handler = createHandler({ authorize: async () => ({ ok: true, mode: 'user', token: 'jwt' }), createClientImpl: () => client });
+  const previous = { SUPABASE_URL: process.env.SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY: process.env.SUPABASE_PUBLISHABLE_KEY };
+  process.env.SUPABASE_URL = 'https://example.supabase.co'; process.env.SUPABASE_PUBLISHABLE_KEY = 'publishable';
+  const res = response();
+  try { await handler({ method: 'DELETE', query: { id: task.id } }, res); } finally { Object.assign(process.env, previous); }
+  assert.equal(res.statusCode, 204);
+  assert.equal(res.ended, true);
+  assert.equal(deletedId, task.id);
+});
+
+test('task deletion rejects invalid identifiers before touching storage', async () => {
+  let touched = false;
+  const handler = createHandler({ authorize: async () => ({ ok: true, token: 'jwt' }), createClientImpl: () => ({ from() { touched = true; return {}; } }) });
+  const previous = { SUPABASE_URL: process.env.SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY: process.env.SUPABASE_PUBLISHABLE_KEY };
+  process.env.SUPABASE_URL = 'https://example.supabase.co'; process.env.SUPABASE_PUBLISHABLE_KEY = 'publishable';
+  const res = response();
+  try { await handler({ method: 'DELETE', query: { id: '../another-user' } }, res); } finally { Object.assign(process.env, previous); }
+  assert.equal(res.statusCode, 400);
+  assert.equal(touched, false);
 });

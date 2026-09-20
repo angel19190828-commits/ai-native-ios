@@ -37,3 +37,8 @@ The initial internal-test workflow supports appointment invitations. Taskspace i
 
 Required before submission: stable API environment, reviewer test account or approved guest-test mode, support URL, privacy-policy URL, account-deletion instructions, screenshots, and contact details.
 
+## Deletion instructions
+
+- On the invitation intake screen, choose **永久删除账户与数据**.
+- When a task is open, scroll below its plan rows to delete only that task or the entire account.
+- Both actions require an explicit destructive confirmation. Account deletion permanently removes the Auth identity and associated cloud task/event/device records; task deletion does not undo items already written into Calendar or Reminders.

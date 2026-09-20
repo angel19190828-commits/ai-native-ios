@@ -30,3 +30,16 @@ test('conflict is surfaced for recovery instead of overwritten', async () => {
   const client = new TaskSyncClient({ baseUrl: 'https://api.example', getAccessToken: async () => 'jwt', fetch: async () => new Response(JSON.stringify({ error: { code: 'task_version_conflict' } }), { status: 409 }) });
   await assert.rejects(() => client.sync(task), (error: unknown) => error instanceof TaskSyncError && error.status === 409);
 });
+
+test('deletes a task by encoded id using the account bearer token', async () => {
+  let request: { url: string; init?: RequestInit } | undefined;
+  const client = new TaskSyncClient({
+    baseUrl: 'https://api.example.test/',
+    getAccessToken: async () => 'jwt',
+    fetch: async (url, init) => { request = { url: String(url), init }; return new Response(null, { status: 204 }); },
+  });
+  await client.delete('8d5d61a0-5891-4ed4-a45a-a684fd11c608');
+  assert.equal(request?.url, 'https://api.example.test/api/tasks?id=8d5d61a0-5891-4ed4-a45a-a684fd11c608');
+  assert.equal(request?.init?.method, 'DELETE');
+  assert.deepEqual(request?.init?.headers, { 'content-type': 'application/json', authorization: 'Bearer jwt' });
+});

@@ -2,8 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, KeyboardAvoidingView, Linking, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, AppState, KeyboardAvoidingView, Linking, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { AccountClient } from './src/api/accountClient';
 import { AiApiClient, AiApiError } from './src/api/aiClient';
 import { RouteApiClient } from './src/api/routeClient';
 import { TaskSyncClient, TaskSyncError } from './src/api/taskSyncClient';
@@ -11,8 +12,8 @@ import { createDeviceCapabilityRegistry, executeNextStep } from './src/capabilit
 import { Task, TaskEvent } from './src/domain/task';
 import { createTaskFromPlan } from './src/domain/taskFactory';
 import { taskReducer } from './src/domain/taskReducer';
-import { currentSession, getAccessToken, getSupabaseClient, isAuthConfigured, requestEmailCode, signOut, startAuthAutoRefresh, verifyEmailCode } from './src/auth/supabaseAuth';
-import { asyncTaskStore } from './src/storage/nativeStores';
+import { clearLocalAuthSession, currentSession, getAccessToken, getSupabaseClient, isAuthConfigured, requestEmailCode, signOut, startAuthAutoRefresh, verifyEmailCode } from './src/auth/supabaseAuth';
+import { createEncryptedTaskStore, deleteTaskEncryptionKey } from './src/storage/nativeStores';
 import { TaskCache } from './src/storage/taskCache';
 import TaskspaceIntakeModule from './modules/taskspace-intake/src/TaskspaceIntakeModule';
 import { consumeAppIntents, TaskspaceAppIntentInvocation } from './src/native/taskspaceAppIntents';
@@ -36,7 +37,10 @@ function App() {
   const executionController = useRef<AbortController | undefined>(undefined);
   const taskRef = useRef<Task | undefined>(undefined);
   const guestAllowed = process.env.EXPO_PUBLIC_ALLOW_GUEST === 'true';
-  const taskCache = useMemo(() => new TaskCache(asyncTaskStore, 50, userId ?? 'unauthenticated'), [userId]);
+  const taskCache = useMemo(() => {
+    const namespace = userId ?? 'unauthenticated';
+    return new TaskCache(createEncryptedTaskStore(namespace), 50, namespace);
+  }, [userId]);
   const lastTaskKey = `taskspace:${userId ?? 'unauthenticated'}:last-task:v1`;
   const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim() ?? '';
   const aiClient = useMemo(() => new AiApiClient({
@@ -48,6 +52,7 @@ function App() {
     getAccessToken,
   }), [apiBaseUrl]);
   const taskSyncClient = useMemo(() => new TaskSyncClient({ baseUrl: apiBaseUrl, getAccessToken }), [apiBaseUrl]);
+  const accountClient = useMemo(() => new AccountClient({ baseUrl: apiBaseUrl, getAccessToken }), [apiBaseUrl]);
   const serverSyncEnabled = isAuthConfigured() && Boolean(apiBaseUrl);
 
   useEffect(() => { taskRef.current = task; }, [task]);
@@ -148,19 +153,24 @@ function App() {
       try {
         const lastTaskId = await AsyncStorage.getItem(lastTaskKey);
         let restored: Task | undefined;
+        let serverRestoreSucceeded = false;
         if (serverSyncEnabled) {
           try {
             restored = await taskSyncClient.latest();
+            serverRestoreSucceeded = true;
             if (restored) {
               await taskCache.save(restored);
               await AsyncStorage.setItem(lastTaskKey, restored.id);
+            } else if (lastTaskId) {
+              await taskCache.remove(lastTaskId);
+              await AsyncStorage.removeItem(lastTaskKey);
             }
           } catch {
             captureOperationalError('server_task_restore_failed', { phase: 'restoring', operation: 'task.restore' });
             if (mounted) setNotice('服务端任务暂时不可用，正在显示这台设备最近保存的状态。');
           }
         }
-        restored ??= lastTaskId ? await taskCache.load(lastTaskId) : undefined;
+        if (!serverRestoreSucceeded) restored ??= lastTaskId ? await taskCache.load(lastTaskId) : undefined;
         if (!mounted || !restored) return;
         setTask(restored);
         setDraft((await taskCache.loadDraft(restored.id)) || '按这个安排');
@@ -357,10 +367,107 @@ function App() {
     setUserId(undefined);
   };
 
+  const requestAccountDeletion = () => {
+    if (!userId || !serverSyncEnabled) {
+      setNotice('账户删除尚未配置，请联系支持。');
+      return;
+    }
+    Alert.alert(
+      '永久删除账户？',
+      '这会删除云端任务、执行记录、设备记录，以及这台设备上的任务和草稿。此操作无法撤销。',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '删除账户',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              const deletedNamespace = userId;
+              setBusy(true);
+              try {
+                await accountClient.deleteAccount();
+                let cleanupFailed = false;
+                try {
+                  await taskCache.clearAll();
+                  await AsyncStorage.removeItem(lastTaskKey);
+                } catch {
+                  cleanupFailed = true;
+                  captureOperationalError('account_local_records_cleanup_failed', { phase: 'account', operation: 'account.delete' });
+                }
+                try {
+                  await deleteTaskEncryptionKey(deletedNamespace);
+                } catch {
+                  cleanupFailed = true;
+                  captureOperationalError('account_local_key_cleanup_failed', { phase: 'account', operation: 'account.delete' });
+                }
+                try {
+                  await clearLocalAuthSession();
+                } catch {
+                  cleanupFailed = true;
+                  captureOperationalError('account_local_session_cleanup_failed', { phase: 'account', operation: 'account.delete' });
+                }
+                executionController.current?.abort();
+                setTask(undefined);
+                setCacheReady(false);
+                setUserId(undefined);
+                setAuthEmail('');
+                setAuthCode('');
+                setCodeSent(false);
+                setAuthNotice(cleanupFailed ? '云端账户已删除；这台设备的本地清理未完全完成，请联系支持或卸载 App。' : '账户和任务已永久删除。');
+              } catch {
+                captureOperationalError('account_deletion_failed', { phase: 'account', operation: 'account.delete' });
+                setNotice('账户删除没有完成；本地数据和登录状态均已保留，请重试。');
+              } finally {
+                setBusy(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
+  const requestTaskDeletion = () => {
+    if (!task) return;
+    Alert.alert(
+      '永久删除这个任务？',
+      '任务内容、确认快照和执行回执都会被删除。已经写入其他 App 的日历或提醒不会自动撤销。',
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '删除任务',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setBusy(true);
+              try {
+                if (serverSyncEnabled) await taskSyncClient.delete(task.id);
+                await taskCache.remove(task.id);
+                await AsyncStorage.removeItem(lastTaskKey);
+                executionController.current?.abort();
+                setTask(undefined);
+                setSourceText('');
+                setOrigin('');
+                setDraft('按这个安排');
+                setSelectedContext(undefined);
+                setNotice('任务已永久删除。');
+              } catch {
+                captureOperationalError('task_deletion_failed', { phase: task.phase, operation: 'task.delete' });
+                setNotice('任务删除没有完成，当前数据已保留，请重试。');
+              } finally {
+                setBusy(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
+
   if (!authReady) return <SafeAreaView style={[styles.screen, styles.center]}><ActivityIndicator color="#1266fa" /></SafeAreaView>;
   if (!userId) return <AuthScreen configured={isAuthConfigured()} email={authEmail} setEmail={setAuthEmail} code={authCode} setCode={setAuthCode} codeSent={codeSent} notice={authNotice} busy={busy} sendCode={sendLoginCode} verify={completeLogin} />;
   if (!cacheReady) return <SafeAreaView style={[styles.screen, styles.center]}><ActivityIndicator color="#1266fa" /></SafeAreaView>;
-  if (!task) return <IntakeScreen sourceText={sourceText} setSourceText={setSourceText} origin={origin} setOrigin={setOrigin} busy={busy} notice={notice} analyze={analyzeInvitation} />;
+  if (!task) return <IntakeScreen sourceText={sourceText} setSourceText={setSourceText} origin={origin} setOrigin={setOrigin} busy={busy} notice={notice} analyze={analyzeInvitation} deleteAccount={isAuthConfigured() ? requestAccountDeletion : undefined} />;
 
   const routeOutput = task.steps.find((step) => step.id === 'commute')?.receipt?.output;
   const departureAt = typeof routeOutput?.departureAt === 'string' ? formatTime(routeOutput.departureAt) : task.facts.departureAt;
@@ -391,6 +498,10 @@ function App() {
         {notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
         {task.confirmedPlan ? <View style={styles.activity}>{task.steps.map((step) => <View key={step.id} style={styles.activityRow}><Text style={styles.activityStatus}>{statusGlyph(step.status)}</Text><View style={styles.activityCopy}><Text style={styles.activityTitle}>{step.title}</Text><Text style={styles.activityDetail}>{step.receipt?.summary ?? statusLabel(step.status)}</Text></View></View>)}</View> : null}
         {rows.map((row) => <PlanRow key={row.label} {...row} selected={selectedContext === row.label} onPress={() => { setSelectedContext(row.label); setDraft((current) => current === '按这个安排' ? '' : current); }} />)}
+        <View style={styles.dataActions}>
+          <Pressable disabled={busy} onPress={requestTaskDeletion}><Text style={styles.deleteAccount}>永久删除这个任务</Text></Pressable>
+          {isAuthConfigured() ? <Pressable disabled={busy} onPress={requestAccountDeletion}><Text style={styles.deleteAccount}>永久删除账户与全部数据</Text></Pressable> : null}
+        </View>
       </ScrollView>
       <KeyboardAvoidingView pointerEvents="box-none" behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.composerLayer}>
         <View style={styles.composerRow}>
@@ -407,7 +518,7 @@ function App() {
   );
 }
 
-function IntakeScreen({ sourceText, setSourceText, origin, setOrigin, busy, notice, analyze }: { sourceText: string; setSourceText: (value: string) => void; origin: string; setOrigin: (value: string) => void; busy: boolean; notice?: string; analyze: () => void }) {
+function IntakeScreen({ sourceText, setSourceText, origin, setOrigin, busy, notice, analyze, deleteAccount }: { sourceText: string; setSourceText: (value: string) => void; origin: string; setOrigin: (value: string) => void; busy: boolean; notice?: string; analyze: () => void; deleteAccount?: () => void }) {
   return <SafeAreaView style={styles.screen}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.intakeContent}>
     <Text style={styles.brand}>TASKSPACE AI</Text><Text style={styles.intakeTitle}>把邀请变成可执行计划</Text><Text style={styles.intakeSubtitle}>粘贴邮件或通知。AI 只负责提议；写入日历、路线和提醒前仍由你确认。</Text>
     <TextInput accessibilityLabel="邀请内容" multiline maxLength={20000} value={sourceText} onChangeText={setSourceText} placeholder="例如：Hi Jade, your interview is next Tuesday at 10:30…" placeholderTextColor="#858b95" style={styles.sourceInput} />
@@ -415,6 +526,7 @@ function IntakeScreen({ sourceText, setSourceText, origin, setOrigin, busy, noti
     {notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
     <Pressable disabled={busy} onPress={analyze} style={({ pressed }) => [styles.primary, pressed && styles.pressed, busy && styles.disabled]}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryLabel}>分析并生成计划</Text>}</Pressable>
     <Text style={styles.privacyHint}>不会在手机中保存 API Key。原始内容仅发送到你配置的 Taskspace API。</Text>
+    {deleteAccount ? <Pressable disabled={busy} onPress={deleteAccount}><Text style={styles.deleteAccountStandalone}>永久删除账户与数据</Text></Pressable> : null}
   </ScrollView></KeyboardAvoidingView></SafeAreaView>;
 }
 
@@ -461,7 +573,7 @@ const styles = StyleSheet.create({
   privacyHint: { marginTop: 14, color: '#7b818b', fontSize: 12, lineHeight: 18 }, primary: { minHeight: 58, marginTop: 18, borderRadius: 29, backgroundColor: '#1266fa', alignItems: 'center', justifyContent: 'center' }, primaryLabel: { color: '#fff', fontSize: 16, fontWeight: '700' }, pressed: { opacity: 0.82 }, disabled: { opacity: 0.45 },
   originInput: { minHeight: 56, marginTop: 12, paddingHorizontal: 18, borderRadius: 18, backgroundColor: '#e5e8ee', color: '#171a20', fontSize: 15 },
   island: { alignSelf: 'center', width: 330, height: 48, marginTop: 8, paddingHorizontal: 14, borderRadius: 24, backgroundColor: '#111214', flexDirection: 'row', alignItems: 'center', gap: 8 }, dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ff615c' }, islandLabel: { flex: 1, color: '#f7f7fa', fontSize: 12, fontWeight: '600' }, islandState: { color: '#ff8a83', fontSize: 11, fontWeight: '600' }, stop: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#ff8a35', alignItems: 'center', justifyContent: 'center' }, stopGlyph: { color: '#fff', fontSize: 11 },
-  content: { padding: 20, paddingBottom: 130 }, taskHeader: { marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, headerActions: { flexDirection: 'row', alignItems: 'center', gap: 16 }, eyebrow: { color: '#717784', fontSize: 13, fontWeight: '600' }, newTask: { color: '#1266fa', fontSize: 14, fontWeight: '600' }, signOut: { color: '#717784', fontSize: 14 }, title: { marginTop: 18, color: '#111318', fontSize: 28, lineHeight: 34, fontWeight: '700' }, subtitle: { marginTop: 6, marginBottom: 20, color: '#69707b', fontSize: 15, lineHeight: 22 }, notice: { marginTop: 12, marginBottom: 14, color: '#a23b32', fontSize: 13, lineHeight: 19 },
+  content: { padding: 20, paddingBottom: 150 }, taskHeader: { marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 }, eyebrow: { color: '#717784', fontSize: 13, fontWeight: '600' }, newTask: { color: '#1266fa', fontSize: 14, fontWeight: '600' }, dataActions: { marginTop: 12, marginBottom: 12, paddingVertical: 12, gap: 14, alignItems: 'center' }, deleteAccount: { color: '#a23b32', fontSize: 13, textDecorationLine: 'underline' }, deleteAccountStandalone: { marginTop: 24, color: '#a23b32', fontSize: 13, textAlign: 'center', textDecorationLine: 'underline' }, signOut: { color: '#717784', fontSize: 14 }, title: { marginTop: 18, color: '#111318', fontSize: 28, lineHeight: 34, fontWeight: '700' }, subtitle: { marginTop: 6, marginBottom: 20, color: '#69707b', fontSize: 15, lineHeight: 22 }, notice: { marginTop: 12, marginBottom: 14, color: '#a23b32', fontSize: 13, lineHeight: 19 },
   activity: { marginBottom: 18, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#e7eaf0' }, activityRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#c9ced8' }, activityStatus: { width: 22, color: '#1266fa', fontSize: 17, textAlign: 'center', fontWeight: '700' }, activityCopy: { flex: 1 }, activityTitle: { color: '#20242b', fontSize: 14, fontWeight: '600' }, activityDetail: { marginTop: 2, color: '#6f7580', fontSize: 12 },
   row: { minHeight: 100, marginBottom: 12, padding: 16, borderRadius: 22, borderWidth: 1, borderColor: 'transparent', backgroundColor: '#171a20', flexDirection: 'row', alignItems: 'center', gap: 14 }, rowPressed: { opacity: 0.82, transform: [{ scale: 0.99 }] }, rowSelected: { borderColor: '#6da5ff', backgroundColor: '#192b45' }, rowIcon: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#20304a', alignItems: 'center', justifyContent: 'center' }, rowIconText: { color: '#a8c8ff', fontSize: 20 }, rowCopy: { flex: 1, gap: 3 }, rowLabel: { color: '#939aa6', fontSize: 13 }, rowValue: { color: '#f4f6fa', fontSize: 20, lineHeight: 25, fontWeight: '700' }, rowDetail: { color: '#b2b8c2', fontSize: 14, lineHeight: 20 },
   composerLayer: { position: 'absolute', left: 0, right: 0, bottom: 0 }, composerRow: { marginHorizontal: 16, marginBottom: 18, flexDirection: 'row', alignItems: 'flex-end', gap: 10 }, composer: { flex: 1, minHeight: 58, maxHeight: 118, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 29, backgroundColor: 'rgba(31,33,39,0.96)', justifyContent: 'center' }, context: { alignSelf: 'flex-start', marginBottom: 3, color: '#a8c8ff', fontSize: 12, fontWeight: '600' }, input: { minHeight: 24, maxHeight: 66, color: '#f5f6f9', fontSize: 16 }, send: { width: 58, height: 58, borderRadius: 29, backgroundColor: '#e9f0ff', alignItems: 'center', justifyContent: 'center' }, sendGlyph: { color: '#1266fa', fontSize: 29, lineHeight: 31, fontWeight: '400' },

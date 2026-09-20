@@ -46,6 +46,10 @@
 - Expanded mobile automated coverage to 33 tests; Expo Doctor passes all 21 checks.
 - Added Sentry crash/session/performance monitoring with EAS source-map wiring, DSN/build-secret release gates, and a tested privacy scrubber that removes task content, identity, request payloads, screenshots, and free-form exception text before transmission.
 - Added static performance spans for AI planning and capability execution plus structured operational error codes; expanded mobile automated coverage to 36 tests.
+- Encrypted the account-scoped device task cache with XChaCha20-Poly1305, a per-account 256-bit key held in SecureStore, per-write 192-bit nonces, storage-key authenticated data, tamper detection, and one-read migration from the earlier plaintext cache.
+- Added confirmed single-task deletion and hard account deletion. The server derives the deletion target only from the verified JWT, uses a server-only Supabase secret key, relies on database cascade cleanup, and the client clears local ciphertext, keys, and sessions after success.
+- Made a successful empty server restore authoritative so deleted tasks cannot be resurrected from the offline cache.
+- Expanded automated coverage to 19 API tests and 45 mobile tests, including concurrent first-use key creation; verified the production Android JavaScript/Hermes bundle includes the authenticated-encryption path.
 
 ### Web prototype
 

@@ -29,6 +29,7 @@ for (const plugin of ['@sentry/react-native/expo', 'expo-calendar', 'expo-secure
   check(plugins.includes(plugin), `${plugin} config plugin`);
 }
 check(Boolean(pkg.dependencies['@sentry/react-native']), 'Sentry React Native dependency');
+check(Boolean(pkg.dependencies['@noble/ciphers']), 'authenticated device-cache encryption dependency');
 check(app.experiments?.inlineModules?.watchedDirectories?.includes('app-intents'), 'iOS App Intents inline module directory');
 check(!pkg.dependencies['expo-app-intents'], 'stable Expo SDK dependency alignment', 'expo-app-intents currently targets Expo SDK 58 beta and must not be mixed into the SDK 57 release build');
 for (const file of [
@@ -53,6 +54,9 @@ check(eas.build?.production?.autoIncrement === true, 'production build auto-incr
 for (const document of ['MVP_SCOPE.md', 'ARCHITECTURE.md', 'PRIVACY_DATA_MAP.md', 'STORE_LISTING.md', 'DEVICE_QA.md']) {
   check(fs.existsSync(path.join(root, 'docs', document)), `${document} exists`);
 }
+for (const file of ['api/account.js', 'api/account.test.js']) {
+  check(fs.existsSync(path.join(root, file)), `${file} exists`);
+}
 
 if (!staticOnly) {
   check(/^https:\/\//.test(process.env.EXPO_PUBLIC_API_BASE_URL ?? ''), 'HTTPS public API URL', 'EXPO_PUBLIC_API_BASE_URL must be an HTTPS URL');
@@ -61,6 +65,7 @@ if (!staticOnly) {
   check(process.env.EXPO_PUBLIC_ALLOW_GUEST !== 'true', 'guest mode disabled', 'EXPO_PUBLIC_ALLOW_GUEST must not be true for release builds');
   check(/^https:\/\//.test(process.env.SUPABASE_URL ?? ''), 'server Supabase URL', 'SUPABASE_URL must be configured for the API deployment');
   check(Boolean(process.env.SUPABASE_PUBLISHABLE_KEY), 'server Supabase publishable key', 'SUPABASE_PUBLISHABLE_KEY is missing for JWT-scoped API access');
+  check(Boolean(process.env.SUPABASE_SECRET_KEY), 'server Supabase secret key', 'SUPABASE_SECRET_KEY is missing for authenticated account deletion');
   check(Boolean(process.env.EAS_PROJECT_ID), 'EAS project ID', 'EAS_PROJECT_ID is missing; run eas init or configure the project ID');
   check(/^https:\/\/[^\s@]+@[^\s/]+\/\d+$/.test(process.env.EXPO_PUBLIC_SENTRY_DSN ?? ''), 'Sentry public DSN', 'EXPO_PUBLIC_SENTRY_DSN must be a valid HTTPS ingest DSN');
   check(Boolean(process.env.SENTRY_ORG), 'Sentry organization', 'SENTRY_ORG is missing for source-map upload');

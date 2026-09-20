@@ -57,4 +57,14 @@ export class TaskSyncClient {
     if (!isTask(payload.task)) throw new TaskSyncError('invalid_task_response', response.status);
     return payload.task;
   }
+
+  async delete(taskId: string): Promise<void> {
+    const response = await this.fetchImpl(`${this.options.baseUrl.replace(/\/$/, '')}/api/tasks?id=${encodeURIComponent(taskId)}`, {
+      method: 'DELETE',
+      headers: await this.headers(),
+    });
+    if (response.ok) return;
+    const payload = await response.json().catch(() => undefined) as { error?: { code?: string } } | undefined;
+    throw new TaskSyncError(payload?.error?.code ?? 'task_delete_failed', response.status);
+  }
 }

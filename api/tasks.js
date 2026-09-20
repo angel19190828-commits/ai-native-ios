@@ -54,11 +54,22 @@ function createUserClient(token, createClientImpl = createClient) {
 
 function createHandler({ authorize = authorizeRequest, createClientImpl = createClient } = {}) {
   return async function handler(req, res) {
-    if (!['GET', 'PUT'].includes(req.method)) return res.status(405).json({ error: { code: 'method_not_allowed' } });
+    if (!['GET', 'PUT', 'DELETE'].includes(req.method)) return res.status(405).json({ error: { code: 'method_not_allowed' } });
     const auth = await authorize(req);
     if (!auth.ok) return res.status(auth.status).json({ error: { code: auth.code } });
     const supabase = createUserClient(auth.token, createClientImpl);
     if (!supabase) return res.status(503).json({ error: { code: 'task_store_not_configured' } });
+
+    if (req.method === 'DELETE') {
+      const taskId = req.query?.id;
+      if (typeof taskId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(taskId)) {
+        return res.status(400).json({ error: { code: 'invalid_task_id' } });
+      }
+      const { error, count } = await supabase.from('tasks').delete({ count: 'exact' }).eq('id', taskId);
+      if (error) return res.status(502).json({ error: { code: 'task_delete_failed' } });
+      if (count === 0) return res.status(404).json({ error: { code: 'task_not_found' } });
+      return res.status(204).end();
+    }
 
     if (req.method === 'GET') {
       let query = supabase.from('tasks').select('*').is('deleted_at', null);

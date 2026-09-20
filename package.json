@@ -6,7 +6,7 @@
   "scripts": {
     "dev:api": "vercel dev",
     "dev:local-proxy": "node prototype/ai-proxy.js",
-    "test:api": "node --test api/_auth.test.js api/plan.test.js api/route.test.js api/tasks.test.js",
+    "test:api": "node --test api/_auth.test.js api/account.test.js api/plan.test.js api/route.test.js api/tasks.test.js",
     "mobile:start": "npm --prefix apps/mobile start",
     "mobile:android": "npm --prefix apps/mobile run android",
     "mobile:test": "npm --prefix apps/mobile run test:domain",

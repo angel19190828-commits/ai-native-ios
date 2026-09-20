@@ -94,3 +94,16 @@ test('account namespaces cannot read each other tasks or drafts', async () => {
   assert.equal(await bob.loadDraft(interviewTask.id), '');
   assert.deepEqual(await bob.list(), []);
 });
+
+test('clearAll removes every task, draft, and account index', async () => {
+  const store = new MemoryStore();
+  const cache = new TaskCache(store, 50, 'alice');
+  const second = { ...structuredClone(interviewTask), id: 'task-2' };
+  await cache.save(structuredClone(interviewTask));
+  await cache.save(second);
+  await cache.saveDraft(interviewTask.id, 'private draft');
+  await cache.clearAll();
+  assert.deepEqual(await cache.list(), []);
+  assert.equal(await cache.load(interviewTask.id), undefined);
+  assert.equal(await cache.loadDraft(interviewTask.id), '');
+});

@@ -75,6 +75,15 @@ export class TaskCache {
     await this.store.setItem(this.indexKey, JSON.stringify(ids));
   }
 
+  async clearAll() {
+    const ids = await this.listIds();
+    await Promise.all(ids.flatMap((taskId) => [
+      this.store.removeItem(this.taskKey(taskId)),
+      this.store.removeItem(this.draftKey(taskId)),
+    ]));
+    await this.store.removeItem(this.indexKey);
+  }
+
   async saveDraft(taskId: string, draft: string) {
     await this.store.setItem(this.draftKey(taskId), draft);
   }

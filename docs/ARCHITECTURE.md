@@ -148,3 +148,7 @@ The SDK 57 implementation compiles app-owned Swift declarations from `apps/mobil
 ## Observability boundary
 
 `src/observability/monitoring.ts` is the only mobile module allowed to call the monitoring SDK directly. Product code reports stable error codes and static lifecycle phases, never caught exception text or task content. A pure, tested sanitizer runs in Sentry's `beforeSend`, `beforeSendTransaction`, and `beforeBreadcrumb` hooks. Metro emits debug IDs/source maps, while the build-only `SENTRY_AUTH_TOKEN` authorizes upload from EAS. Monitoring is disabled when the public DSN is absent or malformed.
+
+## Device storage encryption
+
+Task snapshots, append-only events, indexes, and composer drafts are encrypted before entering AsyncStorage. Each account namespace owns a random 256-bit key stored with `WHEN_UNLOCKED_THIS_DEVICE_ONLY` accessibility in SecureStore. XChaCha20-Poly1305 authenticates both the value and its storage key, uses a fresh 192-bit nonce per write, and fails closed on tampering. Earlier plaintext cache entries are encrypted in place after their first successful read. Authentication refresh credentials remain in their separate SecureStore record.

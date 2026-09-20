@@ -25,6 +25,11 @@
 - Android launcher shortcuts open new/latest task through `taskspace://` links.
 - Sharing plain text from Mail, Messages, and a browser into the Android app imports the text once and never auto-confirms it.
 - Reopening the Android app after the shared text is consumed does not import the same payload again.
+- Delete one task, relaunch online, and verify neither the server nor offline cache restores it; confirm external Calendar/reminder items are not misleadingly claimed as revoked.
+- Delete an account only after the destructive confirmation; verify Auth user, tasks, task events, and devices are gone, the local session is cleared, and encrypted cache records cannot be reopened.
+- Cancel both deletion dialogs and verify no local or remote state changes.
+- Upgrade a build containing the earlier plaintext cache and verify the first read migrates every accessed entry to authenticated ciphertext without losing the task or draft.
+- Tamper with a development-only encrypted cache envelope and verify the app fails closed instead of resetting or displaying corrupted task data.
 
 ## Build and release gates
 
