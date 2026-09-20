@@ -33,7 +33,7 @@ test('a non-invitation plan compiles and executes through the same generic orche
   assert.deepEqual(task.steps.map((step) => step.capabilityId), ['market.quote.read', 'notes.append']);
 
   const adapter = (id: string, risk: 'read' | 'write'): CapabilityAdapter => ({
-    descriptor: { id, title: id, risk, executor: 'server', confirmation: 'once_per_plan' },
+    descriptor: { id, title: id, risk, executor: 'server', confirmation: 'once_per_plan', scopes: [] },
     execute: async () => ({ summary: `${id} complete` }),
   });
   const registry = new CapabilityRegistry([adapter('market.quote.read', 'read'), adapter('notes.append', 'write')]);
@@ -74,4 +74,19 @@ test('plan compiler rejects unknown dependencies and cycles before confirmation'
       { id: 'two', capabilityId: 'y', title: 'Two', risk: 'read', dependsOn: ['one'], input: {} },
     ] },
   }), /cycle/);
+});
+
+test('a required decision can defer all capability steps without inventing work', () => {
+  const task = createTaskFromDefinition({
+    id: 'decision-only', request: '帮我规划旅行', now: at,
+    plan: {
+      goal: { id: 'plan-trip', summary: '规划旅行', desiredOutcome: '形成可确认的旅行安排' },
+      context: [{ id: 'direct', kind: 'direct-input', data: {} }], triggers: [], steps: [],
+      decisions: [{ id: 'destination', prompt: '你想去哪里？', options: [], required: true }],
+      presentation: { title: '旅行计划', startsAt: at, address: '', preparation: [] },
+    },
+  });
+  assert.equal(task.phase, 'needs_decision');
+  assert.equal(task.steps.length, 0);
+  assert.equal(task.pendingDecision?.id, 'destination');
 });

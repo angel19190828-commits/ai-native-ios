@@ -17,6 +17,7 @@ export function invitationToPlanDefinition({ request, plan, origin }: Invitation
     capabilityId: 'system.calendar.createEvent',
     title: `创建${plan.title}日历`,
     risk: 'write',
+    policy: { executor: 'device', confirmation: 'once_per_plan', scopes: ['calendar.write'] },
     input: {
       title: plan.title,
       startDate: plan.startsAt,
@@ -30,6 +31,7 @@ export function invitationToPlanDefinition({ request, plan, origin }: Invitation
     capabilityId: 'maps.route.estimate',
     title: '计算通勤安排',
     risk: 'read',
+    policy: { executor: 'server', confirmation: 'once_per_plan', scopes: ['location.route'] },
     dependsOn: ['calendar'],
     input: {
       destination: plan.location,
@@ -43,6 +45,7 @@ export function invitationToPlanDefinition({ request, plan, origin }: Invitation
     capabilityId: 'system.reminder.schedule',
     title: '设置准备和出发提醒',
     risk: 'write',
+    policy: { executor: 'device', confirmation: 'once_per_plan', scopes: ['notifications.schedule'] },
     dependsOn: plan.kind === 'appointment' ? ['commute'] : ['calendar'],
     input: {
       preparation: plan.preparation,

@@ -18,9 +18,11 @@ export const createReminderAdapter = (
   now: () => number = Date.now,
   highImportance = 4,
 ): CapabilityAdapter => ({
-  descriptor: { id: 'system.reminder.schedule', title: 'Schedule preparation reminders', risk: 'write', executor: 'device', confirmation: 'once_per_plan' },
+  descriptor: { id: 'system.reminder.schedule', title: 'Schedule preparation reminders', risk: 'write', executor: 'device', confirmation: 'once_per_plan', scopes: ['notifications.schedule'] },
   async execute(input, context) {
-    const commuteDeparture = context.dependencyReceipts.commute?.output?.departureAt;
+    const commuteDeparture = Object.values(context.dependencyReceipts)
+      .map((receipt) => receipt.output?.departureAt)
+      .find((value): value is string => typeof value === 'string');
     const fallbackStart = input.eventStartsAt;
     const departureValue = typeof commuteDeparture === 'string' ? commuteDeparture : typeof fallbackStart === 'string' ? fallbackStart : '';
     const departureAt = new Date(departureValue);
@@ -48,4 +50,3 @@ export const createReminderAdapter = (
     return { summary: 'Scheduled preparation and departure reminders', externalId: departureId, output: { preparationId, departureId, preparationAt: preparationAt.toISOString(), departureAt: departureAt.toISOString() } };
   },
 });
-

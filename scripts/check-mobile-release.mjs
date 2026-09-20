@@ -44,6 +44,7 @@ for (const file of [
   'src/domain/orchestration.ts',
   'src/domain/planCompiler.ts',
   'src/scenarios/invitation.ts',
+  'src/api/orchestratorClient.ts',
 ]) {
   check(fs.existsSync(path.join(mobile, file)), `${file} exists`);
 }
@@ -63,7 +64,7 @@ for (const page of ['privacy.html', 'support.html']) {
 for (const workflow of ['mobile-ci.yml', 'eas-internal-build.yml']) {
   check(fs.existsSync(path.join(root, '.github', 'workflows', workflow)), `${workflow} exists`);
 }
-for (const file of ['api/account.js', 'api/account.test.js']) {
+for (const file of ['api/account.js', 'api/account.test.js', 'api/_capabilities.js', 'api/orchestrate.js', 'api/orchestrate.test.js']) {
   check(fs.existsSync(path.join(root, file)), `${file} exists`);
 }
 

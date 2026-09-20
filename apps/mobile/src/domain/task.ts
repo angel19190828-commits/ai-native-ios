@@ -21,6 +21,12 @@ export type StepStatus =
 
 export type CapabilityRisk = 'read' | 'write' | 'external-action' | 'destructive';
 
+export interface CapabilityPolicySnapshot {
+  executor: 'device' | 'server';
+  confirmation: 'never' | 'once_per_plan' | 'always';
+  scopes: string[];
+}
+
 export interface TaskFacts {
   title: string;
   startsAt: string;
@@ -37,6 +43,7 @@ export interface TaskStep {
   capabilityId: string;
   title: string;
   risk: CapabilityRisk;
+  policy?: CapabilityPolicySnapshot;
   status: StepStatus;
   dependsOn: string[];
   input: Record<string, unknown>;

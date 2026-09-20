@@ -50,6 +50,7 @@ export const calendarCreateEventAdapter: CapabilityAdapter = {
     risk: 'write',
     executor: 'device',
     confirmation: 'once_per_plan',
+    scopes: ['calendar.write'],
   },
   async execute(rawInput, context) {
     if (context.signal.aborted) throw new CapabilityError('cancelled', 'Calendar execution was cancelled');
@@ -73,4 +74,3 @@ export const calendarCreateEventAdapter: CapabilityAdapter = {
     return { summary: `Created ${input.title} in Calendar`, externalId: event.id };
   },
 };
-

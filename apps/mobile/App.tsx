@@ -6,11 +6,13 @@ import { ActivityIndicator, Alert, AppState, KeyboardAvoidingView, Linking, Plat
 
 import { AccountClient } from './src/api/accountClient';
 import { AiApiClient, AiApiError } from './src/api/aiClient';
+import { OrchestratorApiClient, OrchestrationContextInput } from './src/api/orchestratorClient';
 import { RouteApiClient } from './src/api/routeClient';
 import { TaskSyncClient, TaskSyncError } from './src/api/taskSyncClient';
 import { createDeviceCapabilityRegistry, executeNextStep } from './src/capabilities';
 import { Task, TaskEvent } from './src/domain/task';
 import { createTaskFromPlan } from './src/domain/taskFactory';
+import { createTaskFromDefinition } from './src/domain/planCompiler';
 import { taskReducer } from './src/domain/taskReducer';
 import { clearLocalAuthSession, currentSession, getAccessToken, getSupabaseClient, isAuthConfigured, requestEmailCode, signOut, startAuthAutoRefresh, verifyEmailCode } from './src/auth/supabaseAuth';
 import { createEncryptedTaskStore, deleteTaskEncryptionKey } from './src/storage/nativeStores';
@@ -28,6 +30,7 @@ function App() {
   const [authNotice, setAuthNotice] = useState<string>();
   const [task, setTask] = useState<Task>();
   const [sourceText, setSourceText] = useState('');
+  const [sourceKind, setSourceKind] = useState<OrchestrationContextInput['kind']>('direct-input');
   const [origin, setOrigin] = useState('');
   const [draft, setDraft] = useState('按这个安排');
   const [selectedContext, setSelectedContext] = useState<string>();
@@ -47,6 +50,10 @@ function App() {
     baseUrl: apiBaseUrl,
     getAccessToken,
   }), [apiBaseUrl]);
+  const orchestratorClient = useMemo(() => new OrchestratorApiClient({
+    baseUrl: apiBaseUrl,
+    getAccessToken,
+  }), [apiBaseUrl]);
   const routeClient = useMemo(() => new RouteApiClient({
     baseUrl: apiBaseUrl,
     getAccessToken,
@@ -63,6 +70,7 @@ function App() {
         executionController.current?.abort();
         setTask(undefined);
         setSourceText(request);
+        setSourceKind('direct-input');
         setOrigin('');
         setSelectedContext(undefined);
         setNotice(request ? '已从 Siri 或快捷指令带入任务内容，请检查后生成计划。' : '已打开新任务，请输入目标。');
@@ -92,6 +100,7 @@ function App() {
         executionController.current?.abort();
         setTask(undefined);
         setSourceText(parsed.searchParams.get('text') ?? '');
+        setSourceKind('direct-input');
         setSelectedContext(undefined);
         setNotice('已从系统快捷方式打开新任务。');
       } else if (action === 'continue') {
@@ -114,6 +123,7 @@ function App() {
       executionController.current?.abort();
       setTask(undefined);
       setSourceText(text);
+      setSourceKind('shared-content');
       setOrigin('');
       setSelectedContext(undefined);
       setNotice('已从其他 App 接收文字，请检查后生成计划。');
@@ -234,6 +244,62 @@ function App() {
     }
   };
 
+  const analyzeGoal = async () => {
+    setNotice(undefined);
+    const goal = sourceText.trim();
+    if (!goal) return setNotice('先描述你想完成的目标。');
+    if (!apiBaseUrl) return setNotice('尚未配置 EXPO_PUBLIC_API_BASE_URL，无法连接 AI 服务。');
+    setBusy(true);
+    try {
+      const locale = Intl.DateTimeFormat().resolvedOptions().locale || 'zh-CN';
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+      const context = [
+        { id: 'primary-context', kind: sourceKind, content: goal },
+        ...(origin.trim() ? [{ id: 'origin', kind: 'direct-input' as const, title: '出发地点', content: origin.trim() }] : []),
+      ];
+      const response = await traceOperation('task.plan', 'ai.plan', () => orchestratorClient.propose({ goal, context, locale, timeZone }));
+      const now = new Date().toISOString();
+      const calendarInput = response.proposal.steps.find((step) => step.capabilityId === 'system.calendar.createEvent')?.input;
+      const routeInput = response.proposal.steps.find((step) => step.capabilityId === 'maps.route.estimate')?.input;
+      const reminderInput = response.proposal.steps.find((step) => step.capabilityId === 'system.reminder.schedule')?.input;
+      const startsAt = typeof calendarInput?.startDate === 'string'
+        ? calendarInput.startDate
+        : typeof reminderInput?.eventStartsAt === 'string' ? reminderInput.eventStartsAt : now;
+      const preparation = Array.isArray(reminderInput?.preparation)
+        ? reminderInput.preparation.filter((item): item is string => typeof item === 'string') : [];
+      const proposedTask = createTaskFromDefinition({
+        id: Crypto.randomUUID(), request: goal, now,
+        plan: {
+          goal: { id: 'general-intent', summary: response.proposal.summary, desiredOutcome: response.proposal.desiredOutcome },
+          context: context.map((item) => ({ id: item.id, kind: item.kind, title: item.title, data: { content: item.content } })),
+          triggers: response.proposal.triggers,
+          decisions: response.proposal.decisions,
+          steps: response.proposal.steps,
+          presentation: {
+            title: response.proposal.summary,
+            startsAt,
+            address: typeof calendarInput?.location === 'string' ? calendarInput.location : typeof routeInput?.destination === 'string' ? routeInput.destination : '',
+            preparation,
+            origin: origin.trim() || undefined,
+          },
+        },
+      });
+      const nextTask = await saveSnapshot(proposedTask, { type: 'task.created', at: now });
+      await AsyncStorage.setItem(lastTaskKey, nextTask.id);
+      await taskCache.saveDraft(nextTask.id, '按这个安排');
+      setTask(nextTask);
+      setDraft('按这个安排');
+      setSelectedContext(undefined);
+      if (nextTask.phase === 'needs_decision') setNotice(nextTask.pendingDecision?.prompt);
+    } catch (error) {
+      const code = error instanceof AiApiError ? error.code : 'unknown';
+      captureOperationalError(`orchestrator_plan_${code}`, { phase: 'planning', operation: 'ai.plan' });
+      setNotice(`目标规划失败（${code}）。你的输入仍保留，可以重试。`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const executeConfirmedTask = async (confirmed: Task) => {
     const controller = new AbortController();
     executionController.current = controller;
@@ -269,7 +335,7 @@ function App() {
       }
       if (current.phase === 'completed') {
         setDraft('全部完成');
-        setNotice('日历、通勤和提醒均已完成，并保存了执行回执。');
+        setNotice('计划中的所有步骤均已完成，并保存了执行回执。');
       }
     } catch {
       captureOperationalError('execution_record_interrupted', { phase: 'executing', operation: 'task.execute' });
@@ -332,6 +398,7 @@ function App() {
     await AsyncStorage.removeItem(lastTaskKey);
     setTask(undefined);
     setSourceText('');
+    setSourceKind('direct-input');
     setOrigin('');
     setDraft('按这个安排');
     setSelectedContext(undefined);
@@ -454,6 +521,7 @@ function App() {
                 executionController.current?.abort();
                 setTask(undefined);
                 setSourceText('');
+                setSourceKind('direct-input');
                 setOrigin('');
                 setDraft('按这个安排');
                 setSelectedContext(undefined);
@@ -474,7 +542,7 @@ function App() {
   if (!authReady) return <SafeAreaView style={[styles.screen, styles.center]}><ActivityIndicator color="#1266fa" /></SafeAreaView>;
   if (!userId) return <AuthScreen configured={isAuthConfigured()} email={authEmail} setEmail={setAuthEmail} code={authCode} setCode={setAuthCode} codeSent={codeSent} notice={authNotice} busy={busy} sendCode={sendLoginCode} verify={completeLogin} />;
   if (!cacheReady) return <SafeAreaView style={[styles.screen, styles.center]}><ActivityIndicator color="#1266fa" /></SafeAreaView>;
-  if (!task) return <IntakeScreen sourceText={sourceText} setSourceText={setSourceText} origin={origin} setOrigin={setOrigin} busy={busy} notice={notice} analyze={analyzeInvitation} deleteAccount={isAuthConfigured() ? requestAccountDeletion : undefined} />;
+  if (!task) return <IntakeScreen sourceText={sourceText} setSourceText={setSourceText} origin={origin} setOrigin={setOrigin} busy={busy} notice={notice} analyzeGoal={analyzeGoal} analyzeInvitation={analyzeInvitation} deleteAccount={isAuthConfigured() ? requestAccountDeletion : undefined} />;
 
   const routeOutput = task.steps.find((step) => step.id === 'commute')?.receipt?.output;
   const departureAt = typeof routeOutput?.departureAt === 'string' ? formatTime(routeOutput.departureAt) : task.facts.departureAt;
@@ -482,12 +550,19 @@ function App() {
   const reminderOutput = task.steps.find((step) => step.id === 'reminders')?.receipt?.output;
   const preparationAt = typeof reminderOutput?.preparationAt === 'string' ? formatTime(reminderOutput.preparationAt) : undefined;
   const reminderDepartureAt = typeof reminderOutput?.departureAt === 'string' ? formatTime(reminderOutput.departureAt) : departureAt;
-  const rows = [
+  const invitationRows = [
     { label: task.facts.title, value: formatDate(task.facts.startsAt), detail: task.facts.address },
     { label: '通勤', value: departureAt ? `${departureAt} 出发` : '等待路线计算', detail: arrivalAt ? `预计 ${arrivalAt} 到达` : '确认出发地后计算' },
     { label: '提醒', value: preparationAt && reminderDepartureAt ? `${preparationAt} 准备 · ${reminderDepartureAt} 出发` : '将在通勤之后设置' },
     { label: '准备事项', value: task.facts.preparation.join('、') || '无' },
   ];
+  const rows = task.goal?.id === 'general-intent'
+    ? task.steps.map((step) => ({
+      label: step.title,
+      value: capabilityLabel(step.capabilityId),
+      detail: [summarizeStepInput(step.input), step.policy?.scopes.length ? `权限：${step.policy.scopes.join('、')}` : undefined].filter(Boolean).join(' · '),
+    }))
+    : invitationRows;
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -525,16 +600,32 @@ function App() {
   );
 }
 
-function IntakeScreen({ sourceText, setSourceText, origin, setOrigin, busy, notice, analyze, deleteAccount }: { sourceText: string; setSourceText: (value: string) => void; origin: string; setOrigin: (value: string) => void; busy: boolean; notice?: string; analyze: () => void; deleteAccount?: () => void }) {
+function IntakeScreen({ sourceText, setSourceText, origin, setOrigin, busy, notice, analyzeGoal, analyzeInvitation, deleteAccount }: { sourceText: string; setSourceText: (value: string) => void; origin: string; setOrigin: (value: string) => void; busy: boolean; notice?: string; analyzeGoal: () => void; analyzeInvitation: () => void; deleteAccount?: () => void }) {
   return <SafeAreaView style={styles.screen}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.intakeContent}>
-    <Text style={styles.brand}>TASKSPACE AI</Text><Text style={styles.intakeTitle}>把邀请变成可执行计划</Text><Text style={styles.intakeSubtitle}>粘贴邮件或通知。AI 只负责提议；写入日历、路线和提醒前仍由你确认。</Text>
-    <TextInput accessibilityLabel="邀请内容" multiline maxLength={20000} value={sourceText} onChangeText={setSourceText} placeholder="例如：Hi Jade, your interview is next Tuesday at 10:30…" placeholderTextColor="#858b95" style={styles.sourceInput} />
+    <Text style={styles.brand}>TASKSPACE AI</Text><Text style={styles.intakeTitle}>说出目标，审阅后再执行</Text><Text style={styles.intakeSubtitle}>描述想完成的事，或粘贴来自邮件、消息、网页和其他 App 的内容。AI 提出计划；系统只执行已注册且由你确认的能力。</Text>
+    <TextInput accessibilityLabel="目标或上下文" multiline maxLength={20000} value={sourceText} onChangeText={setSourceText} placeholder="例如：帮我安排明天下午与 Alex 的会面，并提前提醒我。" placeholderTextColor="#858b95" style={styles.sourceInput} />
     <TextInput accessibilityLabel="出发地点" value={origin} onChangeText={setOrigin} placeholder="出发地点（通勤安排需要，可稍后补充）" placeholderTextColor="#858b95" style={styles.originInput} />
     {notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
-    <Pressable disabled={busy} onPress={analyze} style={({ pressed }) => [styles.primary, pressed && styles.pressed, busy && styles.disabled]}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryLabel}>分析并生成计划</Text>}</Pressable>
+    <Pressable disabled={busy} onPress={analyzeGoal} style={({ pressed }) => [styles.primary, pressed && styles.pressed, busy && styles.disabled]}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryLabel}>根据目标生成计划</Text>}</Pressable>
+    <Pressable disabled={busy} onPress={analyzeInvitation} style={({ pressed }) => [styles.secondary, pressed && styles.pressed, busy && styles.disabled]}><Text style={styles.secondaryLabel}>按邀请内容提取（Reference）</Text></Pressable>
     <Text style={styles.privacyHint}>不会在手机中保存 API Key。原始内容仅发送到你配置的 Taskspace API。</Text>
     {deleteAccount ? <Pressable disabled={busy} onPress={deleteAccount}><Text style={styles.deleteAccountStandalone}>永久删除账户与数据</Text></Pressable> : null}
   </ScrollView></KeyboardAvoidingView></SafeAreaView>;
+}
+
+function capabilityLabel(capabilityId: string) {
+  return ({
+    'system.calendar.createEvent': 'Calendar',
+    'maps.route.estimate': '路线估算',
+    'system.reminder.schedule': '提醒',
+  } as Record<string, string>)[capabilityId] ?? capabilityId;
+}
+
+function summarizeStepInput(input: Record<string, unknown>) {
+  const date = typeof input.startDate === 'string' ? formatDate(input.startDate) : typeof input.eventStartsAt === 'string' ? formatDate(input.eventStartsAt) : undefined;
+  const location = typeof input.location === 'string' ? input.location : typeof input.destination === 'string' ? input.destination : undefined;
+  const preparation = Array.isArray(input.preparation) ? input.preparation.filter((item): item is string => typeof item === 'string').join('、') : undefined;
+  return [date, location, preparation].filter(Boolean).join(' · ') || '等待确认';
 }
 
 function AuthScreen({ configured, email, setEmail, code, setCode, codeSent, notice, busy, sendCode, verify }: { configured: boolean; email: string; setEmail: (value: string) => void; code: string; setCode: (value: string) => void; codeSent: boolean; notice?: string; busy: boolean; sendCode: () => void; verify: () => void }) {
@@ -578,6 +669,7 @@ const styles = StyleSheet.create({
   intakeTitle: { marginTop: 18, maxWidth: 330, color: '#111318', fontSize: 34, lineHeight: 40, fontWeight: '700' }, intakeSubtitle: { marginTop: 12, color: '#626974', fontSize: 16, lineHeight: 24 },
   sourceInput: { minHeight: 230, marginTop: 28, padding: 18, borderRadius: 24, backgroundColor: '#171a20', color: '#f5f6f9', fontSize: 16, lineHeight: 24, textAlignVertical: 'top' },
   privacyHint: { marginTop: 14, color: '#7b818b', fontSize: 12, lineHeight: 18 }, primary: { minHeight: 58, marginTop: 18, borderRadius: 29, backgroundColor: '#1266fa', alignItems: 'center', justifyContent: 'center' }, primaryLabel: { color: '#fff', fontSize: 16, fontWeight: '700' }, pressed: { opacity: 0.82 }, disabled: { opacity: 0.45 },
+  secondary: { minHeight: 52, marginTop: 10, borderRadius: 26, borderWidth: 1, borderColor: '#c5cad3', alignItems: 'center', justifyContent: 'center' }, secondaryLabel: { color: '#4f5662', fontSize: 14, fontWeight: '600' },
   originInput: { minHeight: 56, marginTop: 12, paddingHorizontal: 18, borderRadius: 18, backgroundColor: '#e5e8ee', color: '#171a20', fontSize: 15 },
   island: { alignSelf: 'center', width: 330, height: 48, marginTop: 8, paddingHorizontal: 14, borderRadius: 24, backgroundColor: '#111214', flexDirection: 'row', alignItems: 'center', gap: 8 }, dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#ff615c' }, islandLabel: { flex: 1, color: '#f7f7fa', fontSize: 12, fontWeight: '600' }, islandState: { color: '#ff8a83', fontSize: 11, fontWeight: '600' }, stop: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#ff8a35', alignItems: 'center', justifyContent: 'center' }, stopGlyph: { color: '#fff', fontSize: 11 },
   content: { padding: 20, paddingBottom: 150 }, taskHeader: { marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 }, eyebrow: { color: '#717784', fontSize: 13, fontWeight: '600' }, newTask: { color: '#1266fa', fontSize: 14, fontWeight: '600' }, dataActions: { marginTop: 12, marginBottom: 12, paddingVertical: 12, gap: 14, alignItems: 'center' }, deleteAccount: { color: '#a23b32', fontSize: 13, textDecorationLine: 'underline' }, deleteAccountStandalone: { marginTop: 24, color: '#a23b32', fontSize: 13, textAlign: 'center', textDecorationLine: 'underline' }, signOut: { color: '#717784', fontSize: 14 }, title: { marginTop: 18, color: '#111318', fontSize: 28, lineHeight: 34, fontWeight: '700' }, subtitle: { marginTop: 6, marginBottom: 20, color: '#69707b', fontSize: 15, lineHeight: 22 }, notice: { marginTop: 12, marginBottom: 14, color: '#a23b32', fontSize: 13, lineHeight: 19 },

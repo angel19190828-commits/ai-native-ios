@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-09-19 — Capability-neutral planner boundary
+
+- Added authenticated `POST /api/orchestrate` for direct goals plus typed, minimized context from email, message, webpage, app content, shared content, or direct input.
+- Added a server-owned capability catalog for the three currently executable Calendar, route, and reminder capabilities; the model cannot invent IDs, risk, scope, executor, or confirmation policy.
+- Added strict per-capability argument validation, unknown-field rejection, dependency and cycle validation, bounded goal/context input, and safe decision-only proposals.
+- Added immutable capability policy snapshots (executor, confirmation policy, and scopes) to planned steps; execution rejects catalog/adapter policy drift before dispatch.
+- Added a typed mobile orchestrator client with session auth, cancellation, timeout handling, and independent response validation.
+- Connected the default mobile intake to direct Goal + Context planning while retaining the invitation extractor as an explicit reference path; Android shared text is persisted as `shared-content` context.
+- Made generic plan rows render from capability metadata and replaced the hard-coded completion message with task-neutral execution feedback.
+- Removed the reminder adapter's dependency on a step literally named `commute`; it now consumes typed route output from any dependency receipt.
+- Allowed the generic compiler to persist a `needs_decision` task with zero executable steps instead of inventing placeholder actions.
+- Expanded API coverage to 25 tests and mobile coverage to 54 tests.
+
 ## 2026-09-19 — Intent-driven orchestration pivot
 
 - Reframed the invitation/interview workflow as the first reference scenario and release gate rather than the product boundary.

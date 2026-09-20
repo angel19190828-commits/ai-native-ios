@@ -42,6 +42,10 @@ GitHub `Mobile CI` 会运行 API/移动端测试、类型检查、静态发布�
 
 移动端使用 Supabase email OTP 登录，刷新会话保存在系统 SecureStore；`POST /api/plan` 和 `POST /api/route` 接收短期 access token，并在服务端验证 JWT。计划由确定性代码生成 Calendar → 通勤 → Reminders 步骤；模型不能直接调用系统能力，也不能自行标记步骤完成。`MOBILE_API_TOKEN` 仅保留为本地开发回退，绝不能编译进 App。
 
+通用规划入口 `POST /api/orchestrate` 接收 Goal + typed Context，并只向模型暴露服务端 capability catalog。模型返回的 capability ID、参数与依赖图会被服务端重新校验，risk 由 catalog 附加；未知能力、未知参数、循环依赖以及没有 required Decision 的空计划都会被拒绝。现有 `POST /api/plan` 继续作为面试邀请 reference scenario 的专用提取入口。
+
+移动端首页默认使用通用 Goal 规划，并区分直接输入与系统 Sharesheet 带入的上下文；“按邀请内容提取”保留为明确的 reference 入口。两条路径最终都进入同一个持久 Task、确认快照、capability executor 与 receipt/recovery 流程。
+
 数据库基线位于 `supabase/migrations/202609190001_taskspace_core.sql`，为 tasks、append-only task events 与 devices 启用按 `auth.uid()` 隔离的 Row Level Security。`PUT /api/tasks` 会原子写入任务快照与审计事件，并使用 `syncVersion` 阻止旧设备覆盖新状态；登录后 App 优先恢复服务端最新任务，本地账号级 cache 只作离线回退。部署内测环境后仍须用两个真实测试账号验证跨账号读写被拒绝。
 
 直接用浏览器打开即可,无需安装、无需构建。本地打开时"AI 分析"功能需要额外起一个本地代理(见下方「本地运行」),线上版本已经连了部署好的后端,可以直接粘贴任意邮件文本试真实解析。

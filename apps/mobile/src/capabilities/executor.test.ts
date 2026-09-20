@@ -22,7 +22,7 @@ const executingTask = () => {
 };
 
 const adapter = (id: string, risk: CapabilityAdapter['descriptor']['risk']): CapabilityAdapter => ({
-  descriptor: { id, title: id, risk, executor: 'device', confirmation: 'once_per_plan' },
+  descriptor: { id, title: id, risk, executor: 'device', confirmation: 'once_per_plan', scopes: [] },
   execute: async (_input, context) => ({ summary: `${id} ok`, externalId: context.idempotencyKey }),
 });
 
@@ -69,6 +69,7 @@ test('adapter errors become typed failures instead of false completion', async (
       risk: 'write',
       executor: 'device',
       confirmation: 'once_per_plan',
+      scopes: [],
     },
     execute: async () => {
       throw new CapabilityError('permission_denied', 'Calendar permission denied');
@@ -113,5 +114,26 @@ test('registry rejects duplicate IDs and descriptor risk drift', async () => {
   await assert.rejects(
     () => executeNextStep(executingTask(), wrongRisk, { userId: 'user-1', deviceId: 'device-1' }),
     /risk mismatch/,
+  );
+});
+
+test('executor rejects capability policy drift from the confirmed plan', async () => {
+  const task = executingTask();
+  task.steps[0].policy = { executor: 'device', confirmation: 'once_per_plan', scopes: ['calendar.write'] };
+  const drifted = adapter('system.calendar.createEvent', 'write');
+  drifted.descriptor.scopes = ['calendar.read'];
+  await assert.rejects(
+    () => executeNextStep(task, new CapabilityRegistry([drifted]), { userId: 'user-1', deviceId: 'device-1' }),
+    /policy mismatch/,
+  );
+});
+
+test('executor fails closed when a capability requires unimplemented per-attempt confirmation', async () => {
+  const task = executingTask();
+  const highFriction = adapter('system.calendar.createEvent', 'write');
+  highFriction.descriptor.confirmation = 'always';
+  await assert.rejects(
+    () => executeNextStep(task, new CapabilityRegistry([highFriction]), { userId: 'user-1', deviceId: 'device-1' }),
+    /per-attempt confirmation/,
   );
 });

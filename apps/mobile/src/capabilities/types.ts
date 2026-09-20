@@ -13,6 +13,7 @@ export interface CapabilityDescriptor {
   risk: CapabilityRisk;
   executor: 'device' | 'server';
   confirmation: 'never' | 'once_per_plan' | 'always';
+  scopes: string[];
 }
 
 export interface CapabilityExecutionContext {

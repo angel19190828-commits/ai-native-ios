@@ -52,6 +52,18 @@ export async function executeNextStep(
   if (adapter.descriptor.risk !== step.risk) {
     throw new Error(`Capability risk mismatch: ${step.capabilityId}`);
   }
+  if (step.policy) {
+    const descriptorScopes = [...adapter.descriptor.scopes].sort();
+    const planScopes = [...step.policy.scopes].sort();
+    if (adapter.descriptor.executor !== step.policy.executor
+      || adapter.descriptor.confirmation !== step.policy.confirmation
+      || JSON.stringify(descriptorScopes) !== JSON.stringify(planScopes)) {
+      throw new Error(`Capability policy mismatch: ${step.capabilityId}`);
+    }
+  }
+  if (adapter.descriptor.confirmation === 'always') {
+    throw new Error(`Capability requires per-attempt confirmation: ${step.capabilityId}`);
+  }
 
   const controller = new AbortController();
   const abort = () => controller.abort();

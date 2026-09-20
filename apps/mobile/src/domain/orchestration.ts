@@ -1,4 +1,4 @@
-import type { CapabilityRisk, TaskFacts, TaskStep } from './task';
+import type { CapabilityPolicySnapshot, CapabilityRisk, TaskFacts, TaskStep } from './task';
 
 export type ContextKind = 'direct-input' | 'email' | 'message' | 'webpage' | 'app-content' | 'shared-content';
 
@@ -38,6 +38,7 @@ export interface PlanStepDefinition {
   capabilityId: string;
   title: string;
   risk: CapabilityRisk;
+  policy?: CapabilityPolicySnapshot;
   dependsOn?: string[];
   input: Record<string, unknown>;
   condition?: {

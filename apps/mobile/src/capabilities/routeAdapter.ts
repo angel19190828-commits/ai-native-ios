@@ -2,7 +2,7 @@ import { RouteApiClient } from '../api/routeClient';
 import { CapabilityAdapter, CapabilityError } from './types';
 
 export const createRouteEstimateAdapter = (client: RouteApiClient): CapabilityAdapter => ({
-  descriptor: { id: 'maps.route.estimate', title: 'Estimate transit route', risk: 'read', executor: 'server', confirmation: 'once_per_plan' },
+  descriptor: { id: 'maps.route.estimate', title: 'Estimate transit route', risk: 'read', executor: 'server', confirmation: 'once_per_plan', scopes: ['location.route'] },
   async execute(input, context) {
     const origin = typeof input.origin === 'string' ? input.origin.trim() : '';
     const destination = typeof input.destination === 'string' ? input.destination.trim() : '';

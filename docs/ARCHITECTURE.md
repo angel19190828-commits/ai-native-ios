@@ -164,17 +164,34 @@ The SDK 57 implementation compiles app-owned Swift declarations from `apps/mobil
 7. Share targets, App Intents/App Shortcuts, Android shortcuts/deep links.
 8. Privacy, observability, device QA, TestFlight, and Android internal testing.
 
+## Capability-neutral planner contract
+
+`POST /api/orchestrate` is the first capability-neutral planning boundary. It accepts a direct goal plus zero or more typed, length-limited context items. The server—not the client and not the model—supplies the capability catalog. The model may choose only registered IDs and outputs arguments as JSON for deterministic server validation.
+
+`api/_capabilities.js` currently exposes only capabilities with executable adapters in the mobile app: Calendar event creation, route estimation, and reminder scheduling. For every proposed step, the server:
+
+- rejects unregistered capability IDs and unknown arguments;
+- validates dates, ranges, lengths, and capability-specific required fields;
+- attaches authoritative risk from the catalog rather than trusting model output;
+- snapshots executor location, confirmation policy, and data scopes into every proposed step, then checks them against the device registry before dispatch;
+- checks unique step IDs, known dependencies, and an acyclic graph;
+- permits a zero-step proposal only when a required decision explicitly defers execution.
+
+The mobile `OrchestratorApiClient` validates the returned envelope again before it can reach the domain compiler. `/api/plan` remains the invitation reference extractor until the current UI is migrated; both endpoints share the same authenticated boundary and neither can execute capabilities directly.
+
+The App intake now defaults to this generic endpoint: users can state a goal directly or arrive with shared text, which is preserved as typed `direct-input` or `shared-content` context. The invitation extractor remains available as an explicit reference path. Generic proposals are compiled, persisted, confirmed, executed, stopped, recovered, and receipted through the same task kernel. During compatibility migration, the App derives a temporary presentation projection from capability inputs so the existing review shell can render the plan.
+
 ## Next generalization milestone
 
-The next milestone is a backend planner contract that returns a capability-neutral `PlanDefinition` instead of invitation fields. It must:
+The next milestone is to remove the remaining presentation compatibility layer and ship a second real vertical slice. It must:
 
-1. accept a direct goal plus one or more typed, minimized context items;
-2. resolve only against a server-supplied catalog of registered capabilities and schemas;
-3. return typed decisions for missing information rather than scenario-specific missing-field names;
-4. pass deterministic graph, risk, scope, and confirmation policy validation before persistence;
-5. keep the current invitation extractor as one adapter and prove a second real scenario (monitor → Notes or dinner planning) end to end.
+1. replace `TaskFacts` with scenario-independent task summary/projection records and migrate older encrypted/server snapshots;
+2. collect and re-plan typed decisions without discarding task history;
+3. add one real non-invitation capability (for example Notes append or restaurant search) with server/device execution and receipts;
+4. add source-app metadata where platform share contracts expose it;
+5. prove the second scenario on physical iOS and Android devices while keeping the invitation adapter operational.
 
-Until that contract exists, `/api/plan` remains explicitly the invitation reference planner; it must not be presented as a general autonomous agent.
+`/api/orchestrate` is still a planning boundary, not a general autonomous agent. It cannot act outside the registered catalog and does not execute its own proposals.
 
 ## Observability boundary
 
