@@ -288,7 +288,14 @@ function App() {
     setNotice(undefined);
     try {
       const at = new Date().toISOString();
-      const digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, JSON.stringify({ revision: task.revision, facts: task.facts, steps: task.steps }));
+      const digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, JSON.stringify({
+        revision: task.revision,
+        goal: task.goal,
+        context: task.context,
+        triggers: task.triggers,
+        facts: task.facts,
+        steps: task.steps,
+      }));
       const confirmed = await appendEvent(task.id, {
         type: 'plan.confirmed',
         at,

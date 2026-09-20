@@ -22,6 +22,9 @@ test('appointment plan becomes Calendar -> commute -> reminders', () => {
   assert.deepEqual(task.steps.map((step) => step.id), ['calendar', 'commute', 'reminders']);
   assert.deepEqual(task.steps.map((step) => step.dependsOn), [[], ['calendar'], ['commute']]);
   assert.equal(task.steps[0].input.startDate, basePlan.startsAt);
+  assert.equal(task.goal?.id, 'arrange-invitation');
+  assert.equal(task.context?.[0].kind, 'email');
+  assert.equal(task.triggers?.[0].kind, 'manual');
 });
 
 test('missing facts create a decision instead of silently inventing values', () => {

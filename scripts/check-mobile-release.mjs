@@ -41,6 +41,9 @@ for (const file of [
   'metro.config.js',
   'src/observability/monitoring.ts',
   'src/observability/monitoringCore.ts',
+  'src/domain/orchestration.ts',
+  'src/domain/planCompiler.ts',
+  'src/scenarios/invitation.ts',
 ]) {
   check(fs.existsSync(path.join(mobile, file)), `${file} exists`);
 }
@@ -51,8 +54,14 @@ for (const name of ['development', 'preview', 'production']) {
 }
 check(eas.build?.preview?.distribution === 'internal', 'Android/iOS internal preview profile');
 check(eas.build?.production?.autoIncrement === true, 'production build auto-increment');
-for (const document of ['MVP_SCOPE.md', 'ARCHITECTURE.md', 'PRIVACY_DATA_MAP.md', 'STORE_LISTING.md', 'DEVICE_QA.md']) {
+for (const document of ['MVP_SCOPE.md', 'ARCHITECTURE.md', 'PRIVACY_DATA_MAP.md', 'STORE_LISTING.md', 'DEVICE_QA.md', 'RELEASE_RUNBOOK.md']) {
   check(fs.existsSync(path.join(root, 'docs', document)), `${document} exists`);
+}
+for (const page of ['privacy.html', 'support.html']) {
+  check(fs.existsSync(path.join(root, page)), `${page} exists`);
+}
+for (const workflow of ['mobile-ci.yml', 'eas-internal-build.yml']) {
+  check(fs.existsSync(path.join(root, '.github', 'workflows', workflow)), `${workflow} exists`);
 }
 for (const file of ['api/account.js', 'api/account.test.js']) {
   check(fs.existsSync(path.join(root, file)), `${file} exists`);

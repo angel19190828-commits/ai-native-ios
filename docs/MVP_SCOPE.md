@@ -14,7 +14,13 @@ The differentiation is not “a chatbot that can do more.” It is an execution 
 - more trustworthy because every write or external action has scope, preview, confirmation, progress, cancellation, and a result receipt;
 - cross-platform because the task model and plugin protocol are shared while system integrations are implemented per platform.
 
-## First end-to-end use case
+## Product boundary
+
+The product is a general-purpose, intent-driven orchestration layer. A user may start with a direct goal or context shared from an email, message, webpage, commerce surface, travel confirmation, or another app. The reusable system owns planning, missing-information decisions, confirmation, dependency-aware execution, receipts, and ongoing task state. A scenario is an adapter and reference implementation, not a new hard-coded state machine.
+
+The orchestrator operates on registered capability IDs and typed plans. It must not contain branches for “interview,” “dinner,” “travel,” or any future scenario. Platform limits still apply: a capability can act only through a supported API, intent, deep link, share contract, or project-owned connector.
+
+## First reference scenario and release gate
 
 **Invitation → interview plan**
 
@@ -27,7 +33,7 @@ The differentiation is not “a chatbot that can do more.” It is an execution 
 7. After explicit confirmation, the app creates the calendar event, stores the commute plan, and schedules preparation/departure reminders.
 8. The task records per-step results and supports safe retry or stopping remaining work.
 
-This workflow is the release gate. Additional email, dinner-planning, and generic-agent scenarios remain prototypes until this workflow is reliable on real devices.
+This workflow remains the first release gate and working vertical slice. It validates the general kernel but does not define the product. Additional scenarios remain behind the same safety gates until the generalized planner contract and at least one non-invitation vertical slice are proven.
 
 ## Supported inputs
 
@@ -70,7 +76,8 @@ Arbitrary third-party plugin installation and unreviewed code execution are expl
 
 Every task must preserve:
 
-- the original user request;
+- the original user intent / goal and typed source context;
+- its manual, time, event, or condition trigger;
 - extracted facts and user corrections;
 - proposed steps and permission scopes;
 - the exact confirmed snapshot;
@@ -97,4 +104,3 @@ Every task must preserve:
 - A public plugin marketplace.
 - General computer-use automation or accessibility-based screen control.
 - Claiming Apple Intelligence integration where the OS or an app has not exposed the required schema/capability.
-

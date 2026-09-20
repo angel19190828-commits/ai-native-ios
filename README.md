@@ -1,10 +1,10 @@
 # 目标任务空间 · AI 原生 iOS 概念设计
 
-一个概念设计项目:探索当 AI 成为 iOS 的系统基础能力后,系统如何把用户当前看到的信息或表达的目标,转化为清晰、可执行、可追踪的跨应用任务计划。
+一个正在产品化的跨平台 AI task orchestration 项目：把用户直接表达的目标，或来自邮件、消息、网页与 App 的当前上下文，转化为可审阅、可确认、可执行、可恢复的跨能力任务计划。
 
 > 当前正在从概念原型推进为跨平台内测 MVP。网页 prototype 继续作为交互规格；`apps/mobile` 是独立的 Expo/React Native iOS 与 Android 应用工程，不是 WebView 包装。
 
-场景:用户收到一封邀请/通知邮件(面试、线上会议、账单截止……),系统识别其中的时间、地点、联系人和准备要求,生成一个可查看、可修改、可执行、可撤销的任务计划,横跨日历、地图、提醒事项、文件与信息 App。
+面试邀请流程是第一个完整 reference scenario 与内测 release gate，不再是产品边界。通用 kernel 围绕 Goal、Context、Trigger、Plan、Decision、Capability、Confirmation、Receipt 与持续 Task State 构建；新增 dinner、monitoring、travel 或 purchase 场景不应修改 reducer 或 executor。
 
 ## 快速入口
 
@@ -21,6 +21,8 @@
 - 插件清单 Schema：[docs/plugin-manifest.schema.json](docs/plugin-manifest.schema.json)
 - 移动端工程：[apps/mobile](apps/mobile)
 - 隐私数据地图：[docs/PRIVACY_DATA_MAP.md](docs/PRIVACY_DATA_MAP.md)
+- 内测发布手册：[docs/RELEASE_RUNBOOK.md](docs/RELEASE_RUNBOOK.md)
+- 公开页面：[隐私说明](privacy.html) · [内测支持](support.html)
 
 ```bash
 npm run mobile:start
@@ -33,6 +35,8 @@ npm run release:check:static
 复制 `apps/mobile/.env.example` 为 `apps/mobile/.env.local`，填写 API 地址、Supabase URL 与 publishable key。`EXPO_PUBLIC_*` 会进入 App bundle，因此这里只能放公开配置，不能放 Gemini key、Supabase secret key 或静态生产 token。外部构建必须关闭 `EXPO_PUBLIC_ALLOW_GUEST`。
 
 EAS 构建配置位于 `apps/mobile/eas.json`，区分 development、preview/internal 与 production/store 三个环境。运行云构建前需先关联真实 EAS project，并在对应环境设置 `EXPO_PUBLIC_API_BASE_URL` 与 Supabase 公开配置；发布前检查会拒绝 guest mode、缺少 HTTPS API、账号配置、project ID、隐私政策或支持页面的构建。
+
+GitHub `Mobile CI` 会运行 API/移动端测试、类型检查、静态发布检查、Expo Doctor 与 Android production export。`EAS Internal Build` 仅手动触发；按照 Expo 的 CI 要求，必须先登录并为 iOS、Android 各成功完成一次交互式 EAS build，建立 project ID 与签名凭据。
 
 当前基线为 Expo SDK 57、React Native 0.86 和 TypeScript。iOS 原生构建仍需要 macOS/Xcode 或 EAS Build；App Intents、Share Extension 和需要原生权限的能力必须使用 development build/TestFlight，不能只靠 Expo Go 验证。
 

@@ -1,6 +1,6 @@
 # Internal-testing Store Listing Baseline
 
-Status: Draft; URLs, screenshots, legal contact, and test credentials remain release blockers.
+Status: Draft; public privacy/support pages exist, while screenshots, a dedicated legal/support contact, stable test credentials, and signed builds remain release blockers.
 
 ## Product identity
 
@@ -36,6 +36,13 @@ The initial internal-test workflow supports appointment invitations. Taskspace i
 6. During execution, use the orange stop control to stop remaining steps.
 
 Required before submission: stable API environment, reviewer test account or approved guest-test mode, support URL, privacy-policy URL, account-deletion instructions, screenshots, and contact details.
+
+## Public URLs
+
+- Privacy policy: https://angel19190828-commits.github.io/ai-native-ios/privacy.html
+- Support: https://angel19190828-commits.github.io/ai-native-ios/support.html
+
+These pages describe the current internal-test implementation. Replace the GitHub Issues fallback with a dedicated support address before public release.
 
 ## Deletion instructions
 

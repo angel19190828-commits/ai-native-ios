@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Taskspace AI · 内测支持</title>
+  <style>
+    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; }
+    body { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; line-height: 1.65; background: Canvas; color: CanvasText; }
+    header, section { margin-bottom: 32px; }
+    h1 { font-size: clamp(2rem, 8vw, 3.4rem); line-height: 1.05; letter-spacing: -.04em; margin: 0 0 12px; }
+    h2 { font-size: 1.15rem; margin: 0 0 8px; }
+    p, li { color: color-mix(in srgb, CanvasText 78%, transparent); }
+    ol, ul { padding-left: 1.25rem; }
+    a { color: LinkText; }
+    .callout { padding: 16px 18px; border: 1px solid color-mix(in srgb, CanvasText 16%, transparent); border-radius: 16px; }
+    nav { display: flex; gap: 16px; flex-wrap: wrap; padding-top: 16px; border-top: 1px solid color-mix(in srgb, CanvasText 16%, transparent); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Taskspace AI 内测支持</h1>
+    <p>这里记录当前 iOS TestFlight 与 Android 内部测试版本的使用方式、权限说明和问题反馈路径。</p>
+  </header>
+
+  <main>
+    <section class="callout">
+      <h2>当前状态</h2>
+      <p>应用仍处于内部测试准备阶段。安装链接会在真实 EAS 构建、设备验收和签名配置完成后提供；网页原型不是可提交商店的移动应用。</p>
+    </section>
+
+    <section>
+      <h2>基本测试流程</h2>
+      <ol>
+        <li>使用受邀邮箱完成一次性验证码登录。</li>
+        <li>粘贴面试或预约邀请，并按需填写出发地。</li>
+        <li>审阅 AI 提取的时间、地点、通勤和提醒。</li>
+        <li>点击发送确认；授予需要的 Calendar 与通知权限。</li>
+        <li>观察 Calendar → 通勤 → Reminders 的执行回执。执行中可使用橙色停止按钮停止尚未开始的步骤。</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>权限与常见问题</h2>
+      <ul>
+        <li><strong>Calendar：</strong>用于检查冲突并创建你已确认的日程。</li>
+        <li><strong>通知：</strong>用于创建你已确认的准备和出发提醒。</li>
+        <li><strong>网络：</strong>用于登录、同步任务、AI 规划和通勤估算。</li>
+      </ul>
+      <p>如果某一步失败，任务会保留已经完成的回执，并允许重试尚未完成的步骤。撤销权限请前往系统设置；删除应用本身不会删除已经写入 Calendar 的事件。</p>
+    </section>
+
+    <section>
+      <h2>删除数据</h2>
+      <p>在邀请输入页或任务详情底部选择“永久删除账户与数据”，确认后会删除认证账号及关联的云端任务数据，并清理设备上的加密缓存和会话。单个任务也可以独立删除。</p>
+    </section>
+
+    <section>
+      <h2>反馈问题</h2>
+      <p>请在 <a href="https://github.com/angel19190828-commits/ai-native-ios/issues">GitHub Issues</a> 提交问题，并提供平台、系统版本、应用版本和可复现步骤。不要附上真实邀请正文、验证码、访问令牌或其他敏感信息。</p>
+    </section>
+  </main>
+
+  <nav aria-label="相关页面">
+    <a href="privacy.html">隐私说明</a>
+    <a href="README.md">项目说明</a>
+  </nav>
+</body>
+</html>

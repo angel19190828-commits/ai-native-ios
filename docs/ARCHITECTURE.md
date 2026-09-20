@@ -34,6 +34,25 @@ no credentials      server connector executors
        └──────► Postgres + queue/worker
 ```
 
+## Product model pivot
+
+The invitation/interview flow is the first reference scenario, not the product boundary. The product is an intent-driven orchestration layer:
+
+```text
+user goal + current context + trigger
+  → planner proposal
+  → deterministic plan compiler and policy validation
+  → decisions and immutable confirmation
+  → dependency-aware capability execution
+  → receipts and persistent task state
+```
+
+The domain model now distinguishes reusable `UserGoal`, `TaskContext`, `TaskTrigger`, `PlanDecision`, `PlanStepDefinition`, `Capability`, `ConfirmedPlan`, and `ExecutionReceipt` concepts. `src/domain/planCompiler.ts` validates stable step IDs, known dependencies, and an acyclic graph before a task can be reviewed. `src/capabilities/executor.ts` consumes only compiled steps and registered capability descriptors; it has no invitation, interview, dinner, travel, Calendar, or Maps branch.
+
+Scenario adapters live outside the kernel. `src/scenarios/invitation.ts` translates the existing structured invitation response into the generic plan definition and supplies a temporary scenario-specific presentation model for the current UI. New scenarios should contribute context adapters, planner schemas, and capabilities—not branches in the reducer or executor. A non-invitation market-monitor-to-Notes test proves that a different capability graph runs through the same compiler, registry, reducer, confirmation, idempotency, and receipt path.
+
+The legacy `Task.facts` view model remains during this milestone so encrypted caches, server snapshots, and the working interview UI do not require a destructive migration. New tasks also persist `goal`, `context`, and `triggers`; pre-pivot tasks may omit them when restored. A later storage migration will replace `facts` with scenario-owned projections after the generalized planner response is stable.
+
 ## Responsibility boundary
 
 ### Mobile app
@@ -144,6 +163,18 @@ The SDK 57 implementation compiles app-owned Swift declarations from `apps/mobil
 6. Immutable confirmation, idempotent execution, stop/retry, and receipts.
 7. Share targets, App Intents/App Shortcuts, Android shortcuts/deep links.
 8. Privacy, observability, device QA, TestFlight, and Android internal testing.
+
+## Next generalization milestone
+
+The next milestone is a backend planner contract that returns a capability-neutral `PlanDefinition` instead of invitation fields. It must:
+
+1. accept a direct goal plus one or more typed, minimized context items;
+2. resolve only against a server-supplied catalog of registered capabilities and schemas;
+3. return typed decisions for missing information rather than scenario-specific missing-field names;
+4. pass deterministic graph, risk, scope, and confirmation policy validation before persistence;
+5. keep the current invitation extractor as one adapter and prove a second real scenario (monitor → Notes or dinner planning) end to end.
+
+Until that contract exists, `/api/plan` remains explicitly the invitation reference planner; it must not be presented as a general autonomous agent.
 
 ## Observability boundary
 

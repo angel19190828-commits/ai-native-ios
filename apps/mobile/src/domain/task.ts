@@ -1,3 +1,5 @@
+import type { TaskContext, TaskTrigger, UserGoal } from './orchestration';
+
 export type TaskPhase =
   | 'draft'
   | 'planning'
@@ -38,6 +40,10 @@ export interface TaskStep {
   status: StepStatus;
   dependsOn: string[];
   input: Record<string, unknown>;
+  condition?: {
+    kind: 'always' | 'receipt-match' | 'user-approved';
+    configuration: Record<string, unknown>;
+  };
   receipt?: ExecutionReceipt;
 }
 
@@ -61,6 +67,10 @@ export interface Task {
   id: string;
   syncVersion?: number;
   request: string;
+  /** Generic orchestration model. Optional only while restoring pre-pivot caches. */
+  goal?: UserGoal;
+  context?: TaskContext[];
+  triggers?: TaskTrigger[];
   phase: TaskPhase;
   revision: number;
   facts: TaskFacts;
@@ -77,7 +87,7 @@ export interface Task {
 
 export type TaskEvent =
   | { type: 'planning.started'; at: string }
-  | { type: 'planning.ready'; at: string; facts: TaskFacts; steps: TaskStep[] }
+  | { type: 'planning.ready'; at: string; facts: TaskFacts; steps: TaskStep[]; goal?: UserGoal; context?: TaskContext[]; triggers?: TaskTrigger[] }
   | { type: 'decision.required'; at: string; decision: NonNullable<Task['pendingDecision']> }
   | { type: 'decision.resolved'; at: string }
   | { type: 'plan.confirmed'; at: string; snapshot: ConfirmedPlan }

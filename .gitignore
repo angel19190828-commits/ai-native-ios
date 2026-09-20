@@ -2,6 +2,7 @@
 .env.local
 .vercel
 node_modules/
+dist/
 .tools/
 *.bak
 *.bak.html

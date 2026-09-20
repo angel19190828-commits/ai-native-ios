@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-09-19 — Intent-driven orchestration pivot
+
+- Reframed the invitation/interview workflow as the first reference scenario and release gate rather than the product boundary.
+- Added reusable Goal, Context, Trigger, Decision, Plan Definition, conditional step, and plan-compilation domain contracts.
+- Extracted invitation-specific Calendar → commute → Reminders assembly into a scenario adapter while keeping the existing UI, API response, storage, and execution flow functional.
+- Added deterministic dependency validation and cycle rejection before review or confirmation.
+- Bound confirmation digests to the task goal, context, triggers, presentation projection, and capability steps.
+- Added a non-invitation market-monitor → Notes plan test that executes through the same compiler, registry, reducer, confirmation, and receipt path without scenario branches in the orchestrator.
+- Documented the next milestone: a capability-neutral backend planner contract and second end-to-end reference scenario.
+
+## 2026-09-19 — Release automation and public support baseline
+
+- Added public privacy and internal-test support pages for the current GitHub Pages deployment, including data flow, encrypted device cache, permission, deletion, and safe issue-reporting guidance.
+- Added a least-privilege Mobile CI workflow that installs from both lockfiles, runs API/mobile tests, type checking, static release validation, Expo Doctor, and an Android production export.
+- Added a manually triggered EAS internal-build workflow with explicit Expo-token and project-ID gates; it cannot imply a signed build is ready before the required interactive EAS bootstrap.
+- Added a release runbook separating public mobile configuration, server-only secrets, build credentials, device acceptance, and TestFlight/Play internal distribution.
+- Published canonical privacy and support URLs in the store-listing baseline and environment template.
+
 ## 2026-09-19 — Continuous Task Activity and conversation-first execution
 
 ### Mobile MVP foundation

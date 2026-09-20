@@ -1,0 +1,50 @@
+name: EAS Internal Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        required: true
+        type: choice
+        options: [all, ios, android]
+        default: all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eas-internal-${{ github.ref }}-${{ inputs.platform }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - name: Verify EAS bootstrap configuration
+        shell: bash
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          test -n "$EXPO_TOKEN" || { echo "Missing GitHub secret: EXPO_TOKEN"; exit 1; }
+          node -e "const a=require('./app.json').expo; if(!a.extra?.eas?.projectId) { console.error('Missing expo.extra.eas.projectId. Run eas init after logging in.'); process.exit(1) }"
+      - name: Setup Expo and EAS
+        uses: expo/expo-github-action@v9
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Trigger internal builds
+        run: eas build --platform "${{ inputs.platform }}" --profile preview --non-interactive --no-wait

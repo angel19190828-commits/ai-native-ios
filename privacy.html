@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Taskspace AI · 隐私说明</title>
+  <style>
+    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; }
+    body { max-width: 720px; margin: 0 auto; padding: 48px 24px 80px; line-height: 1.65; background: Canvas; color: CanvasText; }
+    header, section { margin-bottom: 32px; }
+    h1 { font-size: clamp(2rem, 8vw, 3.4rem); line-height: 1.05; letter-spacing: -.04em; margin: 0 0 12px; }
+    h2 { font-size: 1.15rem; margin: 0 0 8px; }
+    p, li { color: color-mix(in srgb, CanvasText 78%, transparent); }
+    ul { padding-left: 1.25rem; }
+    a { color: LinkText; }
+    .meta { font-size: .9rem; }
+    nav { display: flex; gap: 16px; flex-wrap: wrap; padding-top: 16px; border-top: 1px solid color-mix(in srgb, CanvasText 16%, transparent); }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="meta">最后更新：2026 年 9 月 19 日</p>
+    <h1>Taskspace AI 隐私说明</h1>
+    <p>Taskspace AI 是正在内测的跨应用任务助手。它把你主动提交的邀请或任务内容整理成可审阅的计划，并且只在你确认后调用已注册的系统能力。</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>我们处理什么</h2>
+      <ul>
+        <li>你提交的邀请文本、任务要求、时间、地点、出发地和修改内容。</li>
+        <li>账号标识、任务状态、确认记录、执行状态和不含自由文本的操作结果。</li>
+        <li>你授权后产生的日历事件与本地通知。系统权限由 iOS 或 Android 管理。</li>
+        <li>诊断信息，例如应用版本、错误代码和性能耗时。监控配置会移除用户身份、请求正文、任务自由文本、截图和视图层级。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>信息如何使用</h2>
+      <p>邀请与任务内容会发送到配置的 Taskspace API，并由 Google Gemini 协助提取结构化计划。通勤计算会向 Google Routes 请求路线。账号认证和任务同步使用 Supabase。可选的崩溃与性能监控使用 Sentry，并在发送前执行隐私清理。</p>
+      <p>AI 只提出计划，不直接持有系统凭据，也不能自行把步骤标记为完成。Calendar → 通勤 → Reminders 的执行由确定性代码控制；需要写入系统时会先展示明确确认。</p>
+    </section>
+
+    <section>
+      <h2>设备与云端保存</h2>
+      <p>登录会话保存在系统安全存储中。设备上的任务缓存使用每个账号独立的密钥进行认证加密。登录用户的任务快照与审计事件会保存在 Supabase，以便恢复和多设备同步。</p>
+    </section>
+
+    <section>
+      <h2>删除与控制</h2>
+      <p>你可以在应用中删除单个任务，或选择“永久删除账户与数据”删除账号及其云端任务、事件和设备记录。删除任务不会自动撤销已经写入 Calendar 或已创建的系统提醒；这些项目可以继续在对应系统 App 中管理。</p>
+      <p>你也可以随时在系统设置中撤销 Calendar 或通知权限。</p>
+    </section>
+
+    <section>
+      <h2>内测范围</h2>
+      <p>当前版本用于受控内测，不出售个人信息，也不用于广告画像。正式公开发布前，本说明会随实际服务商、保留期限和法律联系信息继续更新。</p>
+    </section>
+
+    <section>
+      <h2>联系与问题</h2>
+      <p>如需报告隐私问题或在无法登录时请求删除，请通过项目的 <a href="https://github.com/angel19190828-commits/ai-native-ios/issues">GitHub Issues</a> 联系维护者。请不要在公开 issue 中粘贴邀请正文、访问令牌或其他敏感信息。</p>
+    </section>
+  </main>
+
+  <nav aria-label="相关页面">
+    <a href="support.html">支持</a>
+    <a href="README.md">项目说明</a>
+  </nav>
+</body>
+</html>
