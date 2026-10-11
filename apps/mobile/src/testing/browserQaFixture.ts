@@ -22,9 +22,9 @@ const modifiedTime = (input: OrchestrateInput, fallback: string) => {
   let hour = Number(match[1]);
   const minute = Number(match[2] ?? 0);
   if (/(晚上|下午)/.test(instruction) && hour < 12) hour += 12;
-  const next = new Date(fallback);
-  next.setHours(hour, minute, 0, 0);
-  return next.toISOString();
+  const source = fallback.match(/^(\d{4}-\d{2}-\d{2})T.*?([+-]\d{2}:\d{2}|Z)$/u);
+  if (!source) return fallback;
+  return new Date(`${source[1]}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00${source[2]}`).toISOString();
 };
 
 /**

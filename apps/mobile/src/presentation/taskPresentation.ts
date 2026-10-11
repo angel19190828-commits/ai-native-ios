@@ -128,16 +128,26 @@ const executionResult = (step: Task['steps'][number]): ExecutionPresentationStep
 
 const text = (value: unknown) => typeof value === 'string' ? value : undefined;
 
+const dateInSourceOffset = (value: string) => {
+  const date = new Date(value);
+  const offset = value.match(/([+-])(\d{2}):(\d{2})$/u);
+  if (!offset) return { date, timeZone: undefined };
+  const minutes = (Number(offset[2]) * 60 + Number(offset[3])) * (offset[1] === '+' ? 1 : -1);
+  return { date: new Date(date.getTime() + minutes * 60_000), timeZone: 'UTC' };
+};
+
 const dateTime = (value: unknown) => {
   if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) return undefined;
-  return new Date(value).toLocaleString('zh-CN', { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false })
+  const { date, timeZone } = dateInSourceOffset(value);
+  return date.toLocaleString('zh-CN', { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false, timeZone })
     .replace(/(周[一二三四五六日天])(\d)/u, '$1 $2');
 };
 
 const dateRange = (start: unknown, end: unknown) => {
   const from = dateTime(start); const to = dateTime(end);
-  const endTime = typeof end === 'string' && !Number.isNaN(Date.parse(end))
-    ? new Date(end).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }) : undefined;
+  const endValue = typeof end === 'string' && !Number.isNaN(Date.parse(end)) ? dateInSourceOffset(end) : undefined;
+  const endTime = endValue
+    ? endValue.date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: endValue.timeZone }) : undefined;
   return from && to && endTime ? `${from} – ${endTime}` : from;
 };
 
