@@ -24,6 +24,7 @@ export class AiApiError extends Error {
     public readonly code: string,
     public readonly status?: number,
     public readonly requestId?: string,
+    public readonly detail?: string,
   ) {
     super(`AI API request failed: ${code}`);
     this.name = 'AiApiError';

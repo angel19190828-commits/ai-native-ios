@@ -91,6 +91,122 @@ const CAPABILITY_CATALOG = {
       };
     },
   },
+  'taskspace.notes.create': {
+    inputKeys: ['title', 'content', 'tags'],
+    descriptor: {
+      id: 'taskspace.notes.create', title: 'Save a Taskspace note', risk: 'write',
+      executor: 'device', interactionMode: 'structured', confirmation: 'once_per_plan', scopes: ['taskspace.notes.write'],
+      description: 'Persist a note inside Taskspace. This does not write to Apple Notes or another external app.',
+      inputDescription: '{ title, content, optional tags string[] }',
+    },
+    validate(raw) {
+      const input = object(raw, 'note input');
+      rejectUnknown(input, ['title', 'content', 'tags'], 'note input');
+      if (input.tags !== undefined && (!Array.isArray(input.tags) || input.tags.length > 20
+        || input.tags.some((tag) => typeof tag !== 'string' || !tag.trim() || tag.length > 80))) {
+        throw new Error('tags are invalid');
+      }
+      return {
+        title: string(input.title, 'title', { max: 160 }),
+        content: string(input.content, 'content', { max: 12000 }),
+        ...(input.tags === undefined ? {} : { tags: input.tags.map((tag) => tag.trim()) }),
+      };
+    },
+  },
+  'taskspace.messaging.createDraft': {
+    inputKeys: ['recipient', 'channel', 'subject', 'body'],
+    descriptor: {
+      id: 'taskspace.messaging.createDraft', title: 'Create a Taskspace message draft', risk: 'write',
+      executor: 'device', interactionMode: 'structured', confirmation: 'once_per_plan', scopes: ['taskspace.messaging.draft.write'],
+      description: 'Persist a message draft inside Taskspace without sending it to any recipient.',
+      inputDescription: '{ body, optional recipient, channel, subject }',
+    },
+    validate(raw) {
+      const input = object(raw, 'message draft input');
+      rejectUnknown(input, ['recipient', 'channel', 'subject', 'body'], 'message draft input');
+      return {
+        body: string(input.body, 'body', { max: 12000 }),
+        ...(input.recipient === undefined ? {} : { recipient: string(input.recipient, 'recipient', { max: 300 }) }),
+        ...(input.channel === undefined ? {} : { channel: string(input.channel, 'channel', { max: 80 }) }),
+        ...(input.subject === undefined ? {} : { subject: string(input.subject, 'subject', { max: 160 }) }),
+      };
+    },
+  },
+  'taskspace.messaging.approvalDemo': {
+    inputKeys: ['recipient', 'body'],
+    descriptor: {
+      id: 'taskspace.messaging.approvalDemo', title: 'Demonstrate approval for an external send', risk: 'external-action',
+      executor: 'device', interactionMode: 'structured', confirmation: 'always', scopes: ['taskspace.messaging.approval-demo'],
+      description: 'Safe reference action for testing per-attempt approval. It records approval but never sends a message.',
+      inputDescription: '{ recipient, body }. Use only when the user explicitly asks to test or demonstrate high-risk send approval.',
+    },
+    validate(raw) {
+      const input = object(raw, 'approval demo input');
+      rejectUnknown(input, ['recipient', 'body'], 'approval demo input');
+      return {
+        recipient: string(input.recipient, 'recipient', { max: 300 }),
+        body: string(input.body, 'body', { max: 2000 }),
+      };
+    },
+  },
+  'taskspace.preferences.set': {
+    inputKeys: ['key', 'value', 'category'],
+    descriptor: {
+      id: 'taskspace.preferences.set', title: 'Save an explicit user preference', risk: 'write',
+      executor: 'device', interactionMode: 'structured', confirmation: 'once_per_plan', scopes: ['taskspace.preferences.write'],
+      description: 'Persist only a preference explicitly stated by the user. Never infer or silently learn a preference.',
+      inputDescription: '{ key, value, optional category }',
+    },
+    validate(raw) {
+      const input = object(raw, 'preference input');
+      rejectUnknown(input, ['key', 'value', 'category'], 'preference input');
+      return {
+        key: string(input.key, 'key', { max: 100 }), value: string(input.value, 'value', { max: 500 }),
+        ...(input.category === undefined ? {} : { category: string(input.category, 'category', { max: 100 }) }),
+      };
+    },
+  },
+  'files.document.read': {
+    inputKeys: ['acceptedTypes', 'maxBytes'],
+    descriptor: {
+      id: 'files.document.read', title: 'Read a user-selected text document', risk: 'read',
+      executor: 'device', interactionMode: 'structured', confirmation: 'once_per_plan', scopes: ['files.read.user-selected'],
+      description: 'Ask the user to choose a real text document, then read its contents. The file picker is shown during execution.',
+      inputDescription: '{ optional acceptedTypes string[], optional maxBytes 1..200000 }',
+    },
+    validate(raw) {
+      const input = object(raw, 'file read input');
+      rejectUnknown(input, ['acceptedTypes', 'maxBytes'], 'file read input');
+      const supportedTypes = new Set(['text/plain', 'text/markdown', 'application/json', 'text/csv']);
+      if (input.acceptedTypes !== undefined && (!Array.isArray(input.acceptedTypes) || input.acceptedTypes.length > 12
+        || input.acceptedTypes.some((type) => typeof type !== 'string' || !supportedTypes.has(type)))) {
+        throw new Error('acceptedTypes are invalid');
+      }
+      const maxBytes = input.maxBytes === undefined ? 200000 : input.maxBytes;
+      if (!Number.isInteger(maxBytes) || maxBytes < 1 || maxBytes > 200000) throw new Error('maxBytes is invalid');
+      return { ...(input.acceptedTypes === undefined ? {} : { acceptedTypes: input.acceptedTypes }), maxBytes };
+    },
+  },
+  'files.document.create': {
+    inputKeys: ['fileName', 'content', 'mimeType'],
+    descriptor: {
+      id: 'files.document.create', title: 'Create a downloadable document', risk: 'write',
+      executor: 'device', interactionMode: 'structured', confirmation: 'once_per_plan', scopes: ['files.write.user-export'],
+      description: 'Create a real text document. Browser execution downloads it; iPhone execution creates a local file and presents the system share sheet.',
+      inputDescription: '{ fileName ending in .txt, .md, .json or .csv, content, optional mimeType }',
+    },
+    validate(raw, deferred = new Set()) {
+      const input = object(raw, 'file create input');
+      rejectUnknown(input, ['fileName', 'content', 'mimeType'], 'file create input');
+      const fileName = string(input.fileName, 'fileName', { max: 160 });
+      if (!/^[^\\/:*?"<>|]+\.(txt|md|json|csv)$/i.test(fileName)) throw new Error('fileName extension is not supported');
+      return {
+        fileName,
+        ...(deferred.has('content') && input.content === undefined ? {} : { content: string(input.content, 'content', { max: 200000 }) }),
+        ...(input.mimeType === undefined ? {} : { mimeType: string(input.mimeType, 'mimeType', { max: 100 }) }),
+      };
+    },
+  },
 };
 
 function publicCapabilityCatalog() {

@@ -30,11 +30,62 @@ test('normalizes a direct goal and typed context', () => {
   assert.equal(input.context[0].id, 'context-1');
 });
 
+test('time triggers require one exact ISO runAt configuration', () => {
+  const proposal = handler.validateProposal({
+    ...rawProposal,
+    triggers: [{ id: 'later', kind: 'time', configurationJson: '{"runAt":"2026-09-21T12:00:00Z"}' }],
+  });
+  assert.equal(proposal.triggers[0].configuration.runAt, '2026-09-21T12:00:00Z');
+  assert.throws(() => handler.validateProposal({
+    ...rawProposal,
+    triggers: [{ id: 'later', kind: 'time', configurationJson: '{"localTime":"12:00"}' }],
+  }), /time trigger configuration/);
+  const recurring = handler.validateProposal({
+    ...rawProposal,
+    triggers: [{ id: 'daily', kind: 'time', configurationJson: '{"runAt":"2026-09-21T12:00:00Z","recurrence":{"frequency":"daily","interval":1}}' }],
+  });
+  assert.deepEqual(recurring.triggers[0].configuration.recurrence, { frequency: 'daily', interval: 1 });
+  assert.throws(() => handler.validateProposal({
+    ...rawProposal,
+    triggers: [{ id: 'bad-repeat', kind: 'time', configurationJson: '{"runAt":"2026-09-21T12:00:00Z","recurrence":{"frequency":"hourly","interval":0}}' }],
+  }), /recurrence configuration/);
+});
+
 test('catalog rejects unknown capabilities and unknown arguments', () => {
   assert.throws(() => validateCapabilityInput('payments.checkout', {}), /not registered/);
   assert.throws(() => validateCapabilityInput('system.calendar.createEvent', {
     title: 'Meeting', startDate: '2026-09-20T10:00:00Z', endDate: '2026-09-20T11:00:00Z', secret: 'no',
   }), /unknown arguments/);
+});
+
+test('catalog validates generic content artifacts without pretending to send externally', () => {
+  const note = validateCapabilityInput('taskspace.notes.create', { title: '研究摘要', content: '三个要点', tags: ['研究'] });
+  assert.equal(note.descriptor.scopes[0], 'taskspace.notes.write');
+  const draft = validateCapabilityInput('taskspace.messaging.createDraft', { recipient: 'Alex', body: '明天见' });
+  assert.equal(draft.input.body, '明天见');
+  const preference = validateCapabilityInput('taskspace.preferences.set', { key: 'food', value: '素食' });
+  assert.equal(preference.input.value, '素食');
+  assert.throws(() => validateCapabilityInput('taskspace.messaging.createDraft', { recipient: 'Alex' }), /body is invalid/);
+});
+
+test('high-impact reference action is always-confirmed and cannot claim a real send', () => {
+  const demo = validateCapabilityInput('taskspace.messaging.approvalDemo', {
+    recipient: 'alex@example.com', body: '项目已经完成',
+  });
+  assert.equal(demo.descriptor.risk, 'external-action');
+  assert.equal(demo.descriptor.confirmation, 'always');
+  assert.match(demo.descriptor.description, /never sends/);
+});
+
+test('catalog validates real file read and create capabilities with receipt binding support', () => {
+  const read = validateCapabilityInput('files.document.read', { acceptedTypes: ['text/plain'], maxBytes: 100000 });
+  assert.equal(read.descriptor.risk, 'read');
+  assert.equal(read.input.maxBytes, 100000);
+  const create = validateCapabilityInput('files.document.create', { fileName: 'copy.md' }, { deferredKeys: ['content'] });
+  assert.equal(create.input.content, undefined);
+  assert.equal(create.descriptor.scopes[0], 'files.write.user-export');
+  assert.throws(() => validateCapabilityInput('files.document.read', { acceptedTypes: ['application/octet-stream'] }), /acceptedTypes/);
+  assert.throws(() => validateCapabilityInput('files.document.create', { fileName: 'unsafe.exe', content: 'x' }), /extension/);
 });
 
 test('server attaches capability risk and validates an acyclic proposal', () => {
@@ -74,6 +125,19 @@ test('required decisions may safely defer all execution steps', () => {
   });
   assert.equal(proposal.steps.length, 0);
   assert.equal(proposal.decisions[0].required, true);
+});
+
+test('a required decision safely defers known capability steps with missing input', () => {
+  const proposal = handler.validateProposal({
+    ...rawProposal,
+    decisions: [{ id: 'origin', prompt: '你想从哪里出发？', options: [], required: true }],
+    steps: [{
+      id: 'route', title: '估算路线', capabilityId: 'maps.route.estimate', dependsOn: [], bindings: [],
+      inputJson: JSON.stringify({ destination: 'The Hive', arriveBy: '2026-09-22T15:00:00-07:00', mode: 'transit' }),
+    }],
+  });
+  assert.equal(proposal.steps.length, 0);
+  assert.equal(proposal.decisions[0].id, 'origin');
 });
 
 test('rejects dependency cycles and model-selected unknown capabilities', () => {

@@ -5,6 +5,7 @@ export type TaskPhase =
   | 'planning'
   | 'needs_decision'
   | 'ready'
+  | 'waiting'
   | 'executing'
   | 'completed'
   | 'partially_completed'
@@ -54,6 +55,12 @@ export interface TaskStep {
     configuration: Record<string, unknown>;
   };
   receipt?: ExecutionReceipt;
+  approval?: {
+    revision: number;
+    capabilityId: string;
+    input: Record<string, unknown>;
+    approvedAt: string;
+  };
 }
 
 export interface ExecutionReceipt {
@@ -63,6 +70,15 @@ export interface ExecutionReceipt {
   summary: string;
   externalId?: string;
   output?: Record<string, unknown>;
+}
+
+export interface TaskOccurrence {
+  sequence: number;
+  scheduledFor: string;
+  completedAt: string;
+  status: 'completed' | 'failed';
+  failedStepIds: string[];
+  receipts: Array<{ stepId: string; receipt: ExecutionReceipt }>;
 }
 
 export interface ConfirmedPlan {
@@ -90,6 +106,8 @@ export interface Task {
     options: string[];
   };
   confirmedPlan?: ConfirmedPlan;
+  triggerState?: { nextRunAt: string; occurrence: number };
+  occurrences?: TaskOccurrence[];
   stopRequested: boolean;
   updatedAt: string;
 }
@@ -100,7 +118,12 @@ export type TaskEvent =
   | { type: 'decision.required'; at: string; decision: NonNullable<Task['pendingDecision']> }
   | { type: 'decision.resolved'; at: string }
   | { type: 'plan.confirmed'; at: string; snapshot: ConfirmedPlan }
+  | { type: 'trigger.waiting'; at: string; runAt: string }
+  | { type: 'trigger.fired'; at: string }
+  | { type: 'recurrence.scheduled'; at: string; nextRunAt: string }
   | { type: 'execution.started'; at: string }
+  | { type: 'step.approved'; at: string; stepId: string; revision: number; capabilityId: string; input: Record<string, unknown> }
+  | { type: 'step.approval_declined'; at: string; stepId: string }
   | { type: 'step.running'; at: string; stepId: string }
   | { type: 'step.completed'; at: string; stepId: string; receipt: ExecutionReceipt }
   | { type: 'step.failed'; at: string; stepId: string }

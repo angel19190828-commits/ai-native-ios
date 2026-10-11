@@ -139,6 +139,33 @@ test('executor fails closed when a capability requires unimplemented per-attempt
   );
 });
 
+test('executor accepts only approval bound to the current action arguments and revision', async () => {
+  const task = executingTask();
+  const highImpact = adapter('system.calendar.createEvent', 'write');
+  highImpact.descriptor.confirmation = 'always';
+  task.steps[0].policy = {
+    executor: highImpact.descriptor.executor,
+    interactionMode: highImpact.descriptor.interactionMode,
+    confirmation: 'always',
+    scopes: [...highImpact.descriptor.scopes],
+  };
+  task.steps[0].approval = {
+    revision: task.revision,
+    capabilityId: task.steps[0].capabilityId,
+    input: structuredClone(task.steps[0].input),
+    approvedAt: at,
+  };
+  const outcome = await executeNextStep(task, new CapabilityRegistry([highImpact]), { userId: 'u1', deviceId: 'd1' });
+  assert.equal(outcome?.events.at(-1)?.type, 'step.completed');
+
+  task.steps[0].status = 'waiting';
+  task.steps[0].input = { ...task.steps[0].input, title: 'Changed after approval' };
+  await assert.rejects(
+    () => executeNextStep(task, new CapabilityRegistry([highImpact]), { userId: 'u1', deviceId: 'd1' }),
+    /current per-attempt confirmation/,
+  );
+});
+
 test('executor keeps the UI automation extension point fail-closed', async () => {
   const task = executingTask();
   task.steps[0].policy = { executor: 'device', interactionMode: 'ui_automation', confirmation: 'always', scopes: ['screen.interact'] };

@@ -49,6 +49,58 @@ test('execution requires explicit confirmation of the current revision', () => {
   );
 });
 
+test('confirmed task can persist waiting and fire exactly from that state', () => {
+  const waiting = apply(confirm(freshTask()), { type: 'trigger.waiting', at, runAt: '2026-09-21T12:00:00Z' });
+  assert.equal(waiting.phase, 'waiting');
+  const fired = apply(waiting, { type: 'trigger.fired', at });
+  assert.equal(fired.phase, 'executing');
+  assert.throws(() => apply(confirm(freshTask()), { type: 'trigger.fired', at }), /confirmed waiting task/);
+});
+
+test('completed recurrence archives receipts and resets the next occurrence', () => {
+  let task = apply(confirm(freshTask()), { type: 'trigger.waiting', at, runAt: '2026-09-21T12:00:00Z' }, { type: 'trigger.fired', at });
+  for (const step of task.steps) {
+    task = apply(task, { type: 'step.running', at, stepId: step.id }, { type: 'step.completed', at, stepId: step.id, receipt: receipt(step.id) });
+  }
+  assert.equal(task.phase, 'completed');
+  const repeated = apply(task, { type: 'recurrence.scheduled', at, nextRunAt: '2026-09-22T12:00:00Z' });
+  assert.equal(repeated.phase, 'waiting');
+  assert.equal(repeated.triggerState?.occurrence, 2);
+  assert.equal(repeated.occurrences?.[0].receipts.length, task.steps.length);
+  assert.equal(repeated.occurrences?.[0].status, 'completed');
+  assert.ok(repeated.steps.every((step) => step.status === 'waiting' && !step.receipt));
+});
+
+test('failed recurrence records the failed occurrence and continues waiting', () => {
+  let task = apply(confirm(freshTask()), { type: 'trigger.waiting', at, runAt: '2026-09-21T12:00:00Z' }, { type: 'trigger.fired', at });
+  task = apply(task, { type: 'step.running', at, stepId: task.steps[0].id }, { type: 'step.failed', at, stepId: task.steps[0].id });
+  const repeated = apply(task, { type: 'recurrence.scheduled', at, nextRunAt: '2026-09-22T12:00:00Z' });
+  assert.equal(repeated.phase, 'waiting');
+  assert.equal(repeated.occurrences?.[0].status, 'failed');
+  assert.deepEqual(repeated.occurrences?.[0].failedStepIds, [task.steps[0].id]);
+});
+
+test('per-attempt approval is revision-bound and refusal returns the task to editable review', () => {
+  let task = apply(confirm(freshTask()), { type: 'execution.started', at });
+  task = apply(task, {
+    type: 'step.approved', at, stepId: task.steps[0].id, revision: task.revision,
+    capabilityId: task.steps[0].capabilityId, input: task.steps[0].input,
+  });
+  assert.equal(task.steps[0].approval?.revision, task.revision);
+
+  const replanned = apply(task, { type: 'planning.ready', at, facts: task.facts, steps: task.steps.map(({ approval: _approval, ...step }) => step) });
+  assert.equal(replanned.steps[0].approval, undefined);
+  assert.throws(() => apply(replanned, {
+    type: 'step.approved', at, stepId: replanned.steps[0].id, revision: task.revision,
+    capabilityId: replanned.steps[0].capabilityId, input: replanned.steps[0].input,
+  }), /executing task|current action/);
+
+  let declined = apply(confirm(freshTask()), { type: 'execution.started', at });
+  declined = apply(declined, { type: 'step.approval_declined', at, stepId: declined.steps[0].id });
+  assert.equal(declined.phase, 'ready');
+  assert.equal(declined.confirmedPlan, undefined);
+});
+
 test('enforces Calendar -> commute -> reminders and completes only after all receipts', () => {
   let task = apply(freshTask(), { type: 'plan.confirmed', at, snapshot: {
     revision: 1,

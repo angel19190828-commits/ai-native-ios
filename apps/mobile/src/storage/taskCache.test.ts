@@ -47,6 +47,24 @@ test('append persists replayable task events across restart', async () => {
   assert.equal(restored?.confirmedPlan?.digest, 'revision-1');
 });
 
+test('confirmed waiting task survives restart with its time condition intact', async () => {
+  const store = new MemoryStore();
+  const cache = new TaskCache(store);
+  const scheduled = structuredClone(interviewTask);
+  scheduled.triggers = [{ id: 'later', kind: 'time', configuration: { runAt: '2026-09-21T12:00:00Z' } }];
+  await cache.save(scheduled);
+  await cache.append(scheduled.id, {
+    type: 'plan.confirmed', at,
+    snapshot: { revision: scheduled.revision, digest: 'scheduled-r1', confirmedAt: at, steps: structuredClone(scheduled.steps) },
+  });
+  await cache.append(scheduled.id, { type: 'trigger.waiting', at, runAt: '2026-09-21T12:00:00Z' });
+
+  const restored = await new TaskCache(store).load(scheduled.id);
+  assert.equal(restored?.phase, 'waiting');
+  assert.equal(restored?.triggers?.[0].configuration.runAt, '2026-09-21T12:00:00Z');
+  assert.equal(restored?.confirmedPlan?.digest, 'scheduled-r1');
+});
+
 test('compaction preserves the current state and bounds the event log', async () => {
   const store = new MemoryStore();
   const cache = new TaskCache(store, 2);

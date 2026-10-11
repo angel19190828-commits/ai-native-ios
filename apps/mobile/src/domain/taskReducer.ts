@@ -39,11 +39,71 @@ export function taskReducer(task: Task, event: TaskEvent): Task {
     case 'plan.confirmed':
       if (event.snapshot.revision !== task.revision) throw new Error('Cannot confirm a stale task revision');
       return { ...task, phase: 'ready', confirmedPlan: event.snapshot, updatedAt: event.at };
+    case 'trigger.waiting':
+      if (!task.confirmedPlan || task.confirmedPlan.revision !== task.revision) {
+        throw new Error('Waiting requires a confirmed current revision');
+      }
+      if (Number.isNaN(Date.parse(event.runAt))) throw new Error('Waiting requires a valid run time');
+      return { ...task, phase: 'waiting', triggerState: { nextRunAt: event.runAt, occurrence: task.triggerState?.occurrence ?? 1 }, updatedAt: event.at };
+    case 'trigger.fired':
+      if (task.phase !== 'waiting' || !task.confirmedPlan || task.confirmedPlan.revision !== task.revision) {
+        throw new Error('Only a confirmed waiting task can fire');
+      }
+      return { ...task, phase: 'executing', updatedAt: event.at };
+    case 'recurrence.scheduled': {
+      if (!['completed', 'failed', 'partially_completed'].includes(task.phase) || Number.isNaN(Date.parse(event.nextRunAt))) {
+        throw new Error('Only a finished occurrence can schedule another occurrence');
+      }
+      const sequence = task.triggerState?.occurrence ?? 1;
+      const occurrence = {
+        sequence,
+        scheduledFor: task.triggerState?.nextRunAt ?? event.at,
+        completedAt: event.at,
+        status: task.phase === 'completed' ? 'completed' as const : 'failed' as const,
+        failedStepIds: task.steps.filter((step) => step.status === 'failed').map((step) => step.id),
+        receipts: task.steps.flatMap((step) => step.receipt ? [{ stepId: step.id, receipt: step.receipt }] : []),
+      };
+      const steps = task.steps.map((step) => ({ ...step, status: 'waiting' as const, receipt: undefined, approval: undefined }));
+      return {
+        ...task,
+        phase: 'waiting',
+        steps,
+        triggerState: { nextRunAt: event.nextRunAt, occurrence: sequence + 1 },
+        occurrences: [...(task.occurrences ?? []), occurrence].slice(-20),
+        updatedAt: event.at,
+      };
+    }
     case 'execution.started':
       if (!task.confirmedPlan || task.confirmedPlan.revision !== task.revision) {
         throw new Error('Execution requires a confirmed current revision');
       }
-      return { ...task, phase: 'executing', stopRequested: false, updatedAt: event.at };
+      return { ...task, phase: task.steps.length > 0 && task.steps.every((step) => step.status === 'completed') ? 'completed' : 'executing', stopRequested: false, updatedAt: event.at };
+    case 'step.approved': {
+      requireExecuting(task);
+      const step = requireStep(task, event.stepId);
+      if (step.status !== 'waiting' || event.revision !== task.revision || event.capabilityId !== step.capabilityId) {
+        throw new Error('Approval does not match the current action');
+      }
+      return {
+        ...task,
+        steps: updateStep(task.steps, event.stepId, (candidate) => ({
+          ...candidate,
+          approval: {
+            revision: event.revision,
+            capabilityId: event.capabilityId,
+            input: JSON.parse(JSON.stringify(event.input)) as Record<string, unknown>,
+            approvedAt: event.at,
+          },
+        })),
+        updatedAt: event.at,
+      };
+    }
+    case 'step.approval_declined': {
+      requireExecuting(task);
+      const step = requireStep(task, event.stepId);
+      if (step.status !== 'waiting') throw new Error(`Step is not waiting: ${event.stepId}`);
+      return { ...task, phase: 'ready', confirmedPlan: undefined, updatedAt: event.at };
+    }
     case 'step.running': {
       requireExecuting(task);
       const step = requireStep(task, event.stepId);

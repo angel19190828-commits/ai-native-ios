@@ -78,6 +78,7 @@ export class OrchestratorApiClient {
 
   async propose(input: OrchestrateInput): Promise<OrchestrateResponse> {
     if (!input.goal.trim()) throw new AiApiError('invalid_goal');
+    const requestUrl = `${this.options.baseUrl.replace(/\/$/, '')}/api/orchestrate`;
     const token = await this.options.getAccessToken?.();
     const controller = new AbortController();
     const abort = () => controller.abort();
@@ -85,7 +86,7 @@ export class OrchestratorApiClient {
     if (input.signal?.aborted) controller.abort();
     const timer = setTimeout(() => controller.abort(), this.options.timeoutMs ?? 18000);
     try {
-      const response = await this.fetchImpl(`${this.options.baseUrl.replace(/\/$/, '')}/api/orchestrate`, {
+      const response = await this.fetchImpl(requestUrl, {
         method: 'POST', signal: controller.signal,
         headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({
@@ -103,7 +104,8 @@ export class OrchestratorApiClient {
     } catch (error) {
       if (error instanceof AiApiError) throw error;
       if (controller.signal.aborted) throw new AiApiError(input.signal?.aborted ? 'cancelled' : 'timeout');
-      throw new AiApiError('network_unavailable');
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new AiApiError('network_unavailable', undefined, undefined, `${requestUrl} · ${detail}`);
     } finally {
       clearTimeout(timer);
       input.signal?.removeEventListener('abort', abort);

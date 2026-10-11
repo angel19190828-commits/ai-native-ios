@@ -22,10 +22,13 @@
 - 移动端工程：[apps/mobile](apps/mobile)
 - 隐私数据地图：[docs/PRIVACY_DATA_MAP.md](docs/PRIVACY_DATA_MAP.md)
 - 内测发布手册：[docs/RELEASE_RUNBOOK.md](docs/RELEASE_RUNBOOK.md)
+- Windows 浏览器测试：[docs/WINDOWS_BROWSER_TEST.md](docs/WINDOWS_BROWSER_TEST.md)
+- Windows 换机与 Codex 接续：[HANDOFF.md](HANDOFF.md)
 - 公开页面：[隐私说明](privacy.html) · [内测支持](support.html)
 
 ```bash
 npm run mobile:start
+npm run mobile:web
 npm run mobile:android
 npm run mobile:test
 npm run mobile:typecheck

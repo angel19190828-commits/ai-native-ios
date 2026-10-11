@@ -4,10 +4,12 @@
   "private": true,
   "description": "AI-native iOS task planning concept — GitHub Pages frontend + Vercel API backend (Gemini proxy).",
   "scripts": {
-    "dev:api": "vercel dev",
+    "dev:api": "node --env-file=.env.local node_modules/vercel/dist/index.js dev --listen 3000",
+    "dev:browser": "concurrently --kill-others --names API,WEB \"npm run dev:api\" \"npm run mobile:web\"",
     "dev:local-proxy": "node prototype/ai-proxy.js",
     "test:api": "node --test api/_auth.test.js api/account.test.js api/orchestrate.test.js api/plan.test.js api/route.test.js api/tasks.test.js",
     "mobile:start": "npm --prefix apps/mobile start",
+    "mobile:web": "npm --prefix apps/mobile run web",
     "mobile:android": "npm --prefix apps/mobile run android",
     "mobile:test": "npm --prefix apps/mobile run test:domain",
     "mobile:typecheck": "npm --prefix apps/mobile run typecheck",
@@ -17,5 +19,9 @@
   "dependencies": {
     "@supabase/server": "^1.7.0",
     "@supabase/supabase-js": "^2.116.0"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "vercel": "^59.23.2"
   }
 }

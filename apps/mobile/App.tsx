@@ -9,18 +9,25 @@ import { AiApiClient, AiApiError } from './src/api/aiClient';
 import { OrchestratorApiClient, OrchestrationContextInput } from './src/api/orchestratorClient';
 import { RouteApiClient } from './src/api/routeClient';
 import { TaskSyncClient, TaskSyncError } from './src/api/taskSyncClient';
-import { createDeviceCapabilityRegistry, executeNextStep } from './src/capabilities';
+import { createDeviceCapabilityRegistry, executeNextStep, openDocumentResult, resolveStepInput } from './src/capabilities';
 import { Task, TaskEvent } from './src/domain/task';
 import { createTaskFromPlan } from './src/domain/taskFactory';
 import { createTaskFromDefinition } from './src/domain/planCompiler';
 import { taskReducer } from './src/domain/taskReducer';
+import { nextRecurrenceRun, nextTaskRunAt, waitsForFutureTime } from './src/domain/timeTrigger';
+import { mergeRecoverySteps } from './src/domain/taskRecovery';
 import { genericProposalToPlanDefinition } from './src/scenarios/generic';
 import { clearLocalAuthSession, currentSession, getAccessToken, getSupabaseClient, isAuthConfigured, requestEmailCode, signOut, startAuthAutoRefresh, verifyEmailCode } from './src/auth/supabaseAuth';
 import { createEncryptedTaskStore, deleteTaskEncryptionKey } from './src/storage/nativeStores';
+import { ContentArtifactStore } from './src/storage/contentArtifactStore';
+import { buildExplicitPreferenceContext } from './src/personalization/explicitPreferenceContext';
 import { TaskCache } from './src/storage/taskCache';
 import TaskspaceIntakeModule from './modules/taskspace-intake/src/TaskspaceIntakeModule';
 import { consumeAppIntents, TaskspaceAppIntentInvocation } from './src/native/taskspaceAppIntents';
 import { captureOperationalError, traceOperation, withMonitoring } from './src/observability/monitoring';
+import { createBrowserQaProposal } from './src/testing/browserQaFixture';
+import { HighFidelityExecutionSurface, HighFidelityIntake, HighFidelityTaskSurface } from './src/presentation/HighFidelityTaskUI';
+import { createExecutionPresentationModel, createTaskPresentationModel } from './src/presentation/taskPresentation';
 
 function App() {
   const [authReady, setAuthReady] = useState(false);
@@ -38,14 +45,19 @@ function App() {
   const [selectedContext, setSelectedContext] = useState<string>();
   const [cacheReady, setCacheReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [reordering, setReordering] = useState(false);
   const [notice, setNotice] = useState<string>();
   const executionController = useRef<AbortController | undefined>(undefined);
   const taskRef = useRef<Task | undefined>(undefined);
-  const guestAllowed = process.env.EXPO_PUBLIC_ALLOW_GUEST === 'true';
+  const browserTestMode = Platform.OS === 'web';
+  const guestAllowed = browserTestMode || process.env.EXPO_PUBLIC_ALLOW_GUEST === 'true';
   const taskCache = useMemo(() => {
     const namespace = userId ?? 'unauthenticated';
     return new TaskCache(createEncryptedTaskStore(namespace), 50, namespace);
   }, [userId]);
+  const preferenceStore = useMemo(() => new ContentArtifactStore(
+    createEncryptedTaskStore('capability-artifacts'), 'capability-artifacts',
+  ), []);
   const lastTaskKey = `taskspace:${userId ?? 'unauthenticated'}:last-task:v1`;
   const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim() ?? '';
   const aiClient = useMemo(() => new AiApiClient({
@@ -55,7 +67,14 @@ function App() {
   const orchestratorClient = useMemo(() => new OrchestratorApiClient({
     baseUrl: apiBaseUrl,
     getAccessToken,
-  }), [apiBaseUrl]);
+    // Local Vercel + Metro can spend several seconds warming before the API's
+    // own Gemini timeout starts. Keep native strict; give Browser Test Mode
+    // enough time to receive an explicit backend response instead of aborting.
+    timeoutMs: browserTestMode ? 45000 : undefined,
+    // Keep the browser transport as a thin adapter. Calling through globalThis
+    // preserves the browser fetch receiver without changing native networking.
+    fetch: browserTestMode ? ((input, init) => globalThis.fetch(input, init)) : undefined,
+  }), [apiBaseUrl, browserTestMode]);
   const routeClient = useMemo(() => new RouteApiClient({
     baseUrl: apiBaseUrl,
     getAccessToken,
@@ -63,6 +82,18 @@ function App() {
   const taskSyncClient = useMemo(() => new TaskSyncClient({ baseUrl: apiBaseUrl, getAccessToken }), [apiBaseUrl]);
   const accountClient = useMemo(() => new AccountClient({ baseUrl: apiBaseUrl, getAccessToken }), [apiBaseUrl]);
   const serverSyncEnabled = isAuthConfigured() && Boolean(apiBaseUrl);
+  const useBrowserDemoPlanner = browserTestMode && !apiBaseUrl;
+  const plannerSource = useBrowserDemoPlanner
+    ? 'Planner: QA Fixture · 原因：未配置 EXPO_PUBLIC_API_BASE_URL'
+    : 'Planner: Gemini · /api/orchestrate';
+
+  const propose = async (input: Parameters<OrchestratorApiClient['propose']>[0]) => {
+    if (useBrowserDemoPlanner) return {
+      proposal: createBrowserQaProposal(input), requestId: `browser-${Crypto.randomUUID()}`,
+      model: 'deterministic-browser-fixture', catalogVersion: 'browser-qa-v1',
+    };
+    return orchestratorClient.propose(input);
+  };
 
   useEffect(() => { taskRef.current = task; }, [task]);
 
@@ -82,7 +113,7 @@ function App() {
       } else if (invocation.name === 'continueTask') {
         setNotice(task ? '已打开最近的任务和执行回执。' : '当前没有可继续的任务。');
       } else if (invocation.name === 'requestStopTask') {
-        setNotice(task?.phase === 'executing' ? '请在灵动岛点击橙色停止按钮，确认停止剩余操作。' : '当前没有正在执行的任务。');
+        setNotice(task?.phase === 'executing' || task?.phase === 'waiting' ? '请在灵动岛点击橙色停止按钮，确认停止剩余操作。' : '当前没有正在执行的任务。');
       }
   };
 
@@ -110,7 +141,7 @@ function App() {
       } else if (action === 'continue') {
         setNotice(taskRef.current ? '已打开最近的任务和执行回执。' : '当前没有可继续的任务。');
       } else if (action === 'stop') {
-        setNotice(taskRef.current?.phase === 'executing' ? '请点击橙色停止按钮确认停止剩余操作。' : '当前没有正在执行的任务。');
+        setNotice(taskRef.current?.phase === 'executing' || taskRef.current?.phase === 'waiting' ? '请点击橙色停止按钮确认停止剩余操作。' : '当前没有正在执行的任务。');
       }
     };
     void Linking.getInitialURL().then((url) => { if (url) handleUrl({ url }); });
@@ -187,8 +218,17 @@ function App() {
         }
         if (!serverRestoreSucceeded) restored ??= lastTaskId ? await taskCache.load(lastTaskId) : undefined;
         if (!mounted || !restored) return;
+        const interrupted = restored.steps.find((step) => step.status === 'running');
+        if (restored.phase === 'executing' && interrupted) {
+          const event: TaskEvent = { type: 'step.failed', at: new Date().toISOString(), stepId: interrupted.id };
+          restored = taskReducer(restored, event);
+          if (serverSyncEnabled) restored = await taskSyncClient.sync(restored, event);
+          await taskCache.save(restored);
+          if (mounted) setNotice('上次操作在确认结果前中断，系统没有重复执行；请检查已完成结果并调整未完成步骤。');
+        }
         setTask(restored);
-        setDraft((await taskCache.loadDraft(restored.id)) || '按这个安排');
+        const restoredDraft = await taskCache.loadDraft(restored.id);
+        setDraft(restored.phase === 'needs_decision' ? restoredDraft : restoredDraft || '按这个安排');
       } catch {
         captureOperationalError('local_task_restore_failed', { phase: 'restoring', operation: 'task.restore' });
         if (mounted) setNotice('本地任务恢复失败；发送前请重新检查安排。');
@@ -223,7 +263,8 @@ function App() {
   const analyzeInvitation = async () => {
     setNotice(undefined);
     if (!sourceText.trim()) return setNotice('先粘贴邀请或通知内容。');
-    if (!apiBaseUrl) return setNotice('尚未配置 EXPO_PUBLIC_API_BASE_URL，无法连接 AI 服务。');
+    if (!apiBaseUrl && !useBrowserDemoPlanner) return setNotice('尚未配置 EXPO_PUBLIC_API_BASE_URL，无法连接 AI 服务。');
+    if (useBrowserDemoPlanner) return analyzeGoal();
     setBusy(true);
     try {
       const response = await traceOperation('task.plan', 'ai.plan', () => aiClient.planInvitation({
@@ -235,9 +276,9 @@ function App() {
       const proposedTask = createTaskFromPlan({ id: Crypto.randomUUID(), request: sourceText, plan: response.plan, now, origin: origin.trim() || undefined });
       const nextTask = await saveSnapshot(proposedTask, { type: 'task.created', at: now });
       await AsyncStorage.setItem(lastTaskKey, nextTask.id);
-      await taskCache.saveDraft(nextTask.id, '按这个安排');
+      await taskCache.saveDraft(nextTask.id, nextTask.phase === 'needs_decision' ? '' : '按这个安排');
       setTask(nextTask);
-      setDraft('按这个安排');
+      setDraft(nextTask.phase === 'needs_decision' ? '' : '按这个安排');
       setSelectedContext(undefined);
       if (nextTask.phase === 'needs_decision') setNotice(nextTask.pendingDecision?.prompt);
     } catch (error) {
@@ -253,16 +294,24 @@ function App() {
     setNotice(undefined);
     const goal = (sourceKind === 'direct-input' ? sourceText : goalText).trim();
     if (!goal) return setNotice('先描述你想完成的目标。');
-    if (!apiBaseUrl) return setNotice('尚未配置 EXPO_PUBLIC_API_BASE_URL，无法连接 AI 服务。');
+    if (!apiBaseUrl && !useBrowserDemoPlanner) return setNotice('尚未配置 EXPO_PUBLIC_API_BASE_URL，无法连接 AI 服务。');
+    let preferenceContext: OrchestrationContextInput | undefined;
+    try {
+      preferenceContext = buildExplicitPreferenceContext(await preferenceStore.listPreferences(userId ?? 'local-user'));
+    } catch {
+      captureOperationalError('explicit_preferences_restore_failed', { phase: 'planning', operation: 'preference.restore' });
+      return setNotice('无法读取已确认的偏好，因此没有开始规划。请重试或检查本地任务存储。');
+    }
     setBusy(true);
     try {
       const locale = Intl.DateTimeFormat().resolvedOptions().locale || 'zh-CN';
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-      const context = [
+      const context: OrchestrationContextInput[] = [
         { id: 'primary-context', kind: sourceKind, content: goal },
         ...(origin.trim() ? [{ id: 'origin', kind: 'direct-input' as const, title: '出发地点', content: origin.trim() }] : []),
+        ...(preferenceContext ? [preferenceContext] : []),
       ];
-      const response = await traceOperation('task.plan', 'ai.plan', () => orchestratorClient.propose({ goal, context, locale, timeZone }));
+      const response = await traceOperation('task.plan', 'ai.plan', () => propose({ goal, context, locale, timeZone }));
       const now = new Date().toISOString();
       const proposedTask = createTaskFromDefinition({
         id: Crypto.randomUUID(), request: goal, now,
@@ -270,15 +319,18 @@ function App() {
       });
       const nextTask = await saveSnapshot(proposedTask, { type: 'task.created', at: now });
       await AsyncStorage.setItem(lastTaskKey, nextTask.id);
-      await taskCache.saveDraft(nextTask.id, '按这个安排');
+      await taskCache.saveDraft(nextTask.id, nextTask.phase === 'needs_decision' ? '' : '按这个安排');
       setTask(nextTask);
-      setDraft('按这个安排');
+      setDraft(nextTask.phase === 'needs_decision' ? '' : '按这个安排');
       setSelectedContext(undefined);
       if (nextTask.phase === 'needs_decision') setNotice(nextTask.pendingDecision?.prompt);
     } catch (error) {
       const code = error instanceof AiApiError ? error.code : 'unknown';
       captureOperationalError(`orchestrator_plan_${code}`, { phase: 'planning', operation: 'ai.plan' });
-      setNotice(`目标规划失败（${code}）。你的输入仍保留，可以重试。`);
+      const debug = browserTestMode && error instanceof AiApiError
+        ? ` 请求：${apiBaseUrl.replace(/\/$/, '')}/api/orchestrate · HTTP：${error.status ?? '未收到'} · code：${code}${error.detail ? ` · ${error.detail}` : ''}`
+        : '';
+      setNotice(`Gemini planner 调用失败（${code}）。未使用 QA Fixture；你的输入仍保留，可以重试。${debug}`);
     } finally {
       setBusy(false);
     }
@@ -288,7 +340,7 @@ function App() {
     if (!task?.pendingDecision) return;
     const answer = draft.trim();
     if (!answer || answer === '按这个安排') return setNotice('先回答当前问题，再发送。');
-    if (!apiBaseUrl) return setNotice('尚未配置 API，无法继续规划。');
+    if (!apiBaseUrl && !useBrowserDemoPlanner) return setNotice('尚未配置 API，无法继续规划。');
     setBusy(true);
     setNotice(undefined);
     try {
@@ -306,7 +358,7 @@ function App() {
           content: answer,
         };
         const context = [...priorContext, decisionContext];
-        const response = await traceOperation('task.replan', 'ai.plan', () => orchestratorClient.propose({
+        const response = await traceOperation('task.replan', 'ai.plan', () => propose({
           goal: task.goal?.summary ?? task.request,
           context,
           locale: Intl.DateTimeFormat().resolvedOptions().locale || 'zh-CN',
@@ -332,7 +384,7 @@ function App() {
         planning = await appendEvent(planning.id, { type: 'decision.required', at, decision: candidate.pendingDecision });
       }
       setTask(planning);
-      setDraft('按这个安排');
+      setDraft(candidate.pendingDecision ? '' : '按这个安排');
       setSelectedContext(undefined);
       setNotice(candidate.pendingDecision?.prompt ?? '已根据你的回答更新计划，请重新审阅。');
     } catch (error) {
@@ -359,6 +411,12 @@ function App() {
     const registry = createDeviceCapabilityRegistry(routeClient);
     try {
       while (current.phase === 'executing' && !controller.signal.aborted) {
+        const next = current.steps.find((candidate) => candidate.status === 'waiting'
+          && candidate.dependsOn.every((id) => current.steps.find((dependency) => dependency.id === id)?.status === 'completed'));
+        if (next?.policy?.confirmation === 'always' && !next.approval) {
+          setNotice('这项操作需要执行前单独批准。尚未产生任何外部影响。');
+          break;
+        }
         let emitted = current;
         const outcome = await traceOperation('task.execute_step', 'task.execute', () => executeNextStep(current, registry, {
           userId: userId ?? 'local-user',
@@ -384,9 +442,25 @@ function App() {
           break;
         }
       }
-      if (current.phase === 'completed') {
-        setDraft('全部完成');
-        setNotice('计划中的所有步骤均已完成，并保存了执行回执。');
+      if (current.phase === 'completed' || current.phase === 'failed' || current.phase === 'partially_completed') {
+        const nextRunAt = nextRecurrenceRun(current);
+        if (nextRunAt) {
+          const occurrenceFailed = current.phase !== 'completed';
+          current = await appendEvent(current.id, { type: 'recurrence.scheduled', at: new Date().toISOString(), nextRunAt });
+          setTask(current);
+          setDraft('重复任务已继续');
+          setNotice(occurrenceFailed
+            ? `本次运行未完成，失败状态和已有回执已保留；规则继续，下一次将在 ${new Date(nextRunAt).toLocaleString()}。`
+            : `本次运行已完成并保存回执；下一次将在 ${new Date(nextRunAt).toLocaleString()}。`);
+        } else if (current.phase === 'completed') {
+          setDraft('全部完成');
+          setNotice('计划中的所有步骤均已完成，并保存了执行回执。');
+        } else {
+          setDraft('');
+          setNotice(current.phase === 'partially_completed'
+            ? '部分步骤没有完成；已完成的结果会保留且不会自动重复。请选择未完成步骤进行调整。'
+            : '任务没有完成，系统已停止继续执行。请选择未完成步骤进行调整。');
+        }
       }
     } catch {
       captureOperationalError('execution_record_interrupted', { phase: 'executing', operation: 'task.execute' });
@@ -421,11 +495,87 @@ function App() {
       setTask(confirmed);
       setDraft('已确认，开始执行');
       setSelectedContext(undefined);
-      setNotice('计划已锁定，正在从 Calendar 开始执行。');
-      await executeConfirmedTask(confirmed);
+      const runAt = waitsForFutureTime(confirmed);
+      if (runAt) {
+        const waiting = await appendEvent(confirmed.id, { type: 'trigger.waiting', at, runAt });
+        setTask(waiting);
+        setNotice(`任务已保存，将等待到 ${new Date(runAt).toLocaleString()} 后继续。`);
+      } else {
+        setNotice('计划已锁定，正在按确认顺序执行。');
+        await executeConfirmedTask(confirmed);
+      }
     } catch {
       captureOperationalError('confirmation_persist_failed', { phase: 'confirming', operation: 'plan.confirm' });
       setNotice('确认没有保存成功，尚未开始任何系统操作。');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (task?.phase !== 'waiting') return;
+    const runAt = nextTaskRunAt(task);
+    if (!runAt) {
+      setNotice('等待条件无效；任务不会执行，请返回修改计划。');
+      return;
+    }
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const poll = () => {
+      if (!active) return;
+      const delay = Date.parse(runAt) - Date.now();
+      if (delay > 0) {
+        timer = setTimeout(poll, Math.min(delay, 60_000));
+        return;
+      }
+      active = false;
+      void (async () => {
+        try {
+          const current = taskRef.current;
+          if (!current || current.id !== task.id || current.phase !== 'waiting') return;
+          const fired = await appendEvent(current.id, { type: 'trigger.fired', at: new Date().toISOString() });
+          setTask(fired);
+          setNotice('时间条件已满足，正在继续已确认的任务。');
+          await executeConfirmedTask(fired);
+        } catch {
+          setNotice('时间条件已满足，但任务恢复失败；尚未派发新的操作。');
+        }
+      })();
+    };
+    poll();
+    return () => { active = false; if (timer) clearTimeout(timer); };
+  }, [task?.id, task?.phase, task?.revision, task?.triggerState?.nextRunAt]);
+
+  const approveStep = async (stepId: string) => {
+    if (!task || task.phase !== 'executing') return;
+    const step = task.steps.find((candidate) => candidate.id === stepId);
+    if (!step || step.status !== 'waiting' || step.policy?.confirmation !== 'always') return;
+    setBusy(true);
+    try {
+      const approved = await appendEvent(task.id, {
+        type: 'step.approved', at: new Date().toISOString(), stepId,
+        revision: task.revision, capabilityId: step.capabilityId, input: resolveStepInput(step, task),
+      });
+      setTask(approved);
+      setNotice('已批准当前操作；正在执行。');
+      await executeConfirmedTask(approved);
+    } catch {
+      setNotice('逐次批准没有保存成功；操作尚未执行。');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const declineStepApproval = async (stepId: string) => {
+    if (!task || task.phase !== 'executing') return;
+    setBusy(true);
+    try {
+      const declined = await appendEvent(task.id, { type: 'step.approval_declined', at: new Date().toISOString(), stepId });
+      setTask(declined);
+      setDraft('按这个安排');
+      setNotice('你拒绝了这次操作。原计划未执行，可以修改、重新确认或停止任务。');
+    } catch {
+      setNotice('拒绝操作没有保存成功；系统仍不会执行这项操作。');
     } finally {
       setBusy(false);
     }
@@ -435,7 +585,7 @@ function App() {
     if (!task || !selectedContext) return;
     const instruction = draft.trim();
     if (!instruction || instruction === '按这个安排') return setNotice('请先写下想修改的内容。');
-    if (!apiBaseUrl) return setNotice('尚未配置 API，无法修改计划。');
+    if (!apiBaseUrl && !useBrowserDemoPlanner) return setNotice('尚未配置 API，无法修改计划。');
     setBusy(true);
     setNotice(undefined);
     try {
@@ -450,7 +600,7 @@ function App() {
         id: `review-change-${task.revision + 1}`, kind: 'direct-input',
         title: `修改：${selectedContext}`, content: instruction,
       }];
-      const response = await traceOperation('task.revise', 'ai.plan', () => orchestratorClient.propose({
+      const response = await traceOperation('task.revise', 'ai.plan', () => propose({
         goal: task.goal?.summary ?? task.request, context,
         locale: Intl.DateTimeFormat().resolvedOptions().locale || 'zh-CN',
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
@@ -460,8 +610,9 @@ function App() {
         plan: genericProposalToPlanDefinition({ request: task.request, proposal: response.proposal, context, now: at, origin: task.facts.origin }),
       });
       let revised = await appendEvent(task.id, { type: 'planning.started', at });
+      const recovery = task.phase === 'failed' || task.phase === 'partially_completed';
       revised = await appendEvent(revised.id, {
-        type: 'planning.ready', at, facts: candidate.facts, steps: candidate.steps,
+        type: 'planning.ready', at, facts: candidate.facts, steps: recovery ? mergeRecoverySteps(task.steps, candidate.steps) : candidate.steps,
         goal: candidate.goal, context: candidate.context, triggers: candidate.triggers,
       });
       if (candidate.pendingDecision) revised = await appendEvent(revised.id, { type: 'decision.required', at, decision: candidate.pendingDecision });
@@ -478,8 +629,59 @@ function App() {
     }
   };
 
+  const reorderPlan = async (orderedRows: Array<{ id: string; primary: string }>) => {
+    if (!task || task.phase !== 'ready' || orderedRows.length < 2) return;
+    if (!apiBaseUrl && !useBrowserDemoPlanner) return setNotice('尚未配置 API，无法重新安排计划。');
+    setBusy(true);
+    setReordering(true);
+    setNotice(undefined);
+    try {
+      const at = new Date().toISOString();
+      const priorContext: OrchestrationContextInput[] = task.context?.length
+        ? task.context.map((item) => ({
+          id: item.id, kind: item.kind, sourceApp: item.sourceApp, title: item.title,
+          content: typeof item.data.content === 'string' ? item.data.content : JSON.stringify(item.data),
+        }))
+        : [{ id: 'reference-source', kind: 'direct-input', title: '原始目标', content: task.request }];
+      const proposedOrder = orderedRows.map((row, index) => `${index + 1}. ${row.primary}`).join('\n');
+      const context: OrchestrationContextInput[] = [...priorContext, {
+        id: `review-reorder-${task.revision + 1}`,
+        kind: 'direct-input',
+        title: '调整计划顺序',
+        content: `用户拖动计划项后提出以下新顺序。请根据这个顺序重新计算受影响的时间、路线、提醒和依赖关系；不要沿用与新顺序冲突的旧时间。\n${proposedOrder}`,
+      }];
+      const response = await traceOperation('task.reorder', 'ai.plan', () => propose({
+        goal: task.goal?.summary ?? task.request,
+        context,
+        locale: Intl.DateTimeFormat().resolvedOptions().locale || 'zh-CN',
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      }));
+      const candidate = createTaskFromDefinition({
+        id: task.id, request: task.request, now: at,
+        plan: genericProposalToPlanDefinition({ request: task.request, proposal: response.proposal, context, now: at, origin: task.facts.origin }),
+      });
+      let revised = await appendEvent(task.id, { type: 'planning.started', at });
+      revised = await appendEvent(revised.id, {
+        type: 'planning.ready', at, facts: candidate.facts, steps: candidate.steps,
+        goal: candidate.goal, context: candidate.context, triggers: candidate.triggers,
+      });
+      if (candidate.pendingDecision) revised = await appendEvent(revised.id, { type: 'decision.required', at, decision: candidate.pendingDecision });
+      setTask(revised);
+      setDraft('按这个安排');
+      setSelectedContext(undefined);
+      setNotice(candidate.pendingDecision?.prompt ?? '已经按新的顺序重新安排。');
+    } catch (error) {
+      const code = error instanceof AiApiError ? error.code : 'unknown';
+      captureOperationalError(`review_reorder_${code}`, { phase: 'planning', operation: 'task.reorder' });
+      setNotice(`重新安排失败，原计划未修改（${code}）。可以再次拖动重试。`);
+    } finally {
+      setReordering(false);
+      setBusy(false);
+    }
+  };
+
   const stopExecution = async () => {
-    if (!task || task.phase !== 'executing') return;
+    if (!task || (task.phase !== 'executing' && task.phase !== 'waiting')) return;
     executionController.current?.abort();
     try {
       const requested = await appendEvent(task.id, { type: 'stop.requested', at: new Date().toISOString() });
@@ -642,70 +844,71 @@ function App() {
   if (!authReady) return <SafeAreaView style={[styles.screen, styles.center]}><ActivityIndicator color="#1266fa" /></SafeAreaView>;
   if (!userId) return <AuthScreen configured={isAuthConfigured()} email={authEmail} setEmail={setAuthEmail} code={authCode} setCode={setAuthCode} codeSent={codeSent} notice={authNotice} busy={busy} sendCode={sendLoginCode} verify={completeLogin} />;
   if (!cacheReady) return <SafeAreaView style={[styles.screen, styles.center]}><ActivityIndicator color="#1266fa" /></SafeAreaView>;
-  if (!task) return <IntakeScreen sourceText={sourceText} setSourceText={setSourceText} goalText={goalText} setGoalText={setGoalText} sourceKind={sourceKind} setSourceKind={setSourceKind} origin={origin} setOrigin={setOrigin} busy={busy} notice={notice} analyzeGoal={analyzeGoal} analyzeInvitation={analyzeInvitation} deleteAccount={isAuthConfigured() ? requestAccountDeletion : undefined} />;
+  if (!task) return <HighFidelityIntake sourceText={sourceText} setSourceText={setSourceText} goalText={goalText} setGoalText={setGoalText} sourceKind={sourceKind} setSourceKind={setSourceKind} origin={origin} setOrigin={setOrigin} busy={busy} notice={notice} plannerSource={plannerSource} analyzeGoal={analyzeGoal} />;
 
-  const routeOutput = task.steps.find((step) => step.id === 'commute')?.receipt?.output;
-  const departureAt = typeof routeOutput?.departureAt === 'string' ? formatTime(routeOutput.departureAt) : task.facts.departureAt;
-  const arrivalAt = typeof routeOutput?.arrivalAt === 'string' ? formatTime(routeOutput.arrivalAt) : task.facts.arrivalAt;
-  const reminderOutput = task.steps.find((step) => step.id === 'reminders')?.receipt?.output;
-  const preparationAt = typeof reminderOutput?.preparationAt === 'string' ? formatTime(reminderOutput.preparationAt) : undefined;
-  const reminderDepartureAt = typeof reminderOutput?.departureAt === 'string' ? formatTime(reminderOutput.departureAt) : departureAt;
-  const invitationRows = [
-    { label: task.facts.title, value: formatDate(task.facts.startsAt), detail: task.facts.address },
-    { label: '通勤', value: departureAt ? `${departureAt} 出发` : '等待路线计算', detail: arrivalAt ? `预计 ${arrivalAt} 到达` : '确认出发地后计算' },
-    { label: '提醒', value: preparationAt && reminderDepartureAt ? `${preparationAt} 准备 · ${reminderDepartureAt} 出发` : '将在通勤之后设置' },
-    { label: '准备事项', value: task.facts.preparation.join('、') || '无' },
-  ];
-  const rows = task.goal?.id === 'general-intent'
-    ? task.steps.map((step) => ({
-      label: step.title,
-      value: capabilityLabel(step.capabilityId),
-      detail: [summarizeStepInput(step.input), capabilityReality(step.capabilityId), step.policy?.scopes.length ? `权限：${step.policy.scopes.join('、')}` : undefined].filter(Boolean).join(' · '),
-    }))
-    : invitationRows;
+  if (task.phase === 'draft' || task.phase === 'planning' || task.phase === 'needs_decision' || task.phase === 'ready') {
+    const presentation = createTaskPresentationModel(task);
+    return <HighFidelityTaskSurface
+      model={presentation}
+      selectedContext={selectedContext}
+      draft={draft}
+      setDraft={setDraft}
+      busy={busy}
+      reordering={reordering}
+      notice={notice}
+      browserTestMode={browserTestMode}
+      plannerSource={plannerSource}
+      onSelectRow={(row) => {
+        setSelectedContext(row.primary);
+        setDraft((current) => current === '按这个安排' ? '' : current);
+      }}
+      onClearContext={() => setSelectedContext(undefined)}
+      onStartNewTask={startNewTask}
+      onReorder={reorderPlan}
+      onSend={task.phase === 'needs_decision'
+        ? submitDecision
+        : selectedContext && draft.trim() !== '按这个安排'
+          ? revisePlan
+          : confirmPlan}
+    />;
+  }
 
-  return (
-    <SafeAreaView style={styles.screen}>
-      <StatusBar style="dark" />
-      <View style={styles.island}>
-        <View style={styles.dot} />
-        <Text style={styles.islandLabel}>AI · {task.confirmedPlan ? '计划已确认' : '安排已整理'}</Text>
-        <Text style={styles.islandState}>{task.phase === 'needs_decision' ? '需要决定' : task.phase === 'executing' ? '执行中' : task.phase === 'completed' ? '已完成' : task.confirmedPlan ? '等待执行' : '等待确认'}</Text>
-        {task.phase === 'executing' ? <Pressable accessibilityRole="button" accessibilityLabel="停止任务" onPress={stopExecution} style={styles.stop}><Text style={styles.stopGlyph}>■</Text></Pressable> : null}
-      </View>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.taskHeader}><Text style={styles.eyebrow}>{task.facts.title}</Text><View style={styles.headerActions}><Pressable onPress={startNewTask}><Text style={styles.newTask}>新任务</Text></Pressable>{isAuthConfigured() ? <Pressable onPress={logout}><Text style={styles.signOut}>退出</Text></Pressable> : null}</View></View>
-        <TaskJourney phase={task.phase} />
-        <Text style={styles.title}>{task.phase === 'needs_decision' ? '还需要一点信息。' : '安排整理好了。'}</Text>
-        <Text style={styles.subtitle}>{task.pendingDecision?.prompt ?? task.goal?.desiredOutcome ?? '点选内容进行修改，或直接按这个安排确认。'}</Text>
-        {notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
-        <View style={styles.executionBoundary}><Text style={styles.executionBoundaryTitle}>本次执行边界</Text><Text style={styles.executionBoundaryText}>{task.steps.length ? task.steps.map((step) => capabilityLabel(step.capabilityId)).join(' → ') : '等待补齐决定后生成 capability steps'}</Text><Text style={styles.executionBoundaryHint}>只有这里列出的已注册能力会在确认后执行；餐厅搜索、预订或付款不会被暗中模拟。</Text></View>
-        {task.confirmedPlan ? <View style={styles.activity}><Text style={styles.activityHeading}>{task.phase === 'completed' || task.phase === 'partially_completed' ? '执行回执' : 'Task Activity'}</Text>{task.steps.map((step) => <View key={step.id} style={styles.activityRow}><Text style={styles.activityStatus}>{statusGlyph(step.status)}</Text><View style={styles.activityCopy}><Text style={styles.activityTitle}>{step.title}</Text><Text style={styles.activityDetail}>{step.receipt?.summary ?? statusLabel(step.status)}</Text>{step.receipt?.completedAt ? <Text style={styles.receiptMeta}>{formatDate(step.receipt.completedAt)} · 已保存 receipt</Text> : null}</View></View>)}</View> : null}
-        {rows.map((row) => <PlanRow key={row.label} {...row} selected={selectedContext === row.label} onPress={() => { setSelectedContext(row.label); setDraft((current) => current === '按这个安排' ? '' : current); }} />)}
-        <View style={styles.dataActions}>
-          <Pressable disabled={busy} onPress={requestTaskDeletion}><Text style={styles.deleteAccount}>永久删除这个任务</Text></Pressable>
-          {isAuthConfigured() ? <Pressable disabled={busy} onPress={requestAccountDeletion}><Text style={styles.deleteAccount}>永久删除账户与全部数据</Text></Pressable> : null}
-        </View>
-      </ScrollView>
-      <KeyboardAvoidingView pointerEvents="box-none" behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.composerLayer}>
-        <View style={styles.composerRow}>
-          <View style={styles.composer}>
-            {selectedContext ? <Pressable onPress={() => setSelectedContext(undefined)}><Text style={styles.context}>{selectedContext}　×</Text></Pressable> : null}
-            <TextInput style={styles.input} value={draft} onChangeText={setDraft} placeholder={task.phase === 'needs_decision' ? '回答当前问题…' : '告诉 AI 想怎么改…'} placeholderTextColor="#8e949f" multiline maxLength={1000} />
-          </View>
-          <Pressable disabled={busy || task.phase === 'completed' || task.phase === 'stopped' || task.phase === 'executing'} accessibilityRole="button" accessibilityLabel={task.phase === 'needs_decision' ? '发送回答' : selectedContext && draft.trim() !== '按这个安排' ? '发送修改' : '确认并执行'} onPress={task.phase === 'needs_decision' ? submitDecision : selectedContext && draft.trim() !== '按这个安排' ? revisePlan : task.confirmedPlan ? () => executeConfirmedTask(task) : confirmPlan} style={({ pressed }) => [styles.send, pressed && styles.pressed, (busy || task.phase === 'completed' || task.phase === 'stopped' || task.phase === 'executing') && styles.disabled]}>
-            {busy ? <ActivityIndicator color="#1266fa" /> : <Text style={styles.sendGlyph}>↑</Text>}
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
+  if (task.phase === 'waiting' || task.phase === 'executing' || task.phase === 'completed' || task.phase === 'partially_completed' || task.phase === 'failed' || task.phase === 'stopped') {
+    const presentation = createExecutionPresentationModel(task);
+    return <HighFidelityExecutionSurface
+      model={presentation}
+      notice={notice}
+      browserTestMode={browserTestMode}
+      plannerSource={plannerSource}
+      busy={busy}
+      selectedContext={selectedContext}
+      draft={draft}
+      setDraft={setDraft}
+      onSelectFailedStep={(step) => {
+        setSelectedContext(step.title);
+        setDraft('');
+      }}
+      onOpenResult={(step) => {
+        if (step.result?.actionOutput) void openDocumentResult(step.result.actionOutput).catch((error) => {
+          setNotice(error instanceof Error ? error.message : '无法打开文件');
+        });
+      }}
+      onClearContext={() => setSelectedContext(undefined)}
+      onRecover={revisePlan}
+      onApprove={approveStep}
+      onDeclineApproval={declineStepApproval}
+      onStop={stopExecution}
+      onStartNewTask={startNewTask}
+    />;
+  }
+
+  return null;
 }
 
-function IntakeScreen({ sourceText, setSourceText, goalText, setGoalText, sourceKind, setSourceKind, origin, setOrigin, busy, notice, analyzeGoal, analyzeInvitation, deleteAccount }: {
+function IntakeScreen({ sourceText, setSourceText, goalText, setGoalText, sourceKind, setSourceKind, origin, setOrigin, busy, notice, plannerSource, analyzeGoal, analyzeInvitation, deleteAccount }: {
   sourceText: string; setSourceText: (value: string) => void; goalText: string; setGoalText: (value: string) => void;
   sourceKind: OrchestrationContextInput['kind']; setSourceKind: (value: OrchestrationContextInput['kind']) => void;
-  origin: string; setOrigin: (value: string) => void; busy: boolean; notice?: string;
+  origin: string; setOrigin: (value: string) => void; busy: boolean; notice?: string; plannerSource: string;
   analyzeGoal: () => void; analyzeInvitation: () => void; deleteAccount?: () => void;
 }) {
   const contextMode = sourceKind !== 'direct-input';
@@ -722,6 +925,7 @@ function IntakeScreen({ sourceText, setSourceText, goalText, setGoalText, source
     setOrigin('1285 W Pender Street, Vancouver');
   };
   return <SafeAreaView style={styles.screen}><StatusBar style="dark" /><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.intakeContent}>
+    {Platform.OS === 'web' ? <View style={styles.browserBanner}><Text style={styles.browserBannerTitle}>WINDOWS 浏览器测试模式</Text><Text style={styles.browserBannerText}>{plannerSource}</Text><Text style={styles.browserBannerText}>Calendar、Notifications、App Intents、Sharesheet 仍需之后 iPhone 真机验证。</Text></View> : null}
     <Text style={styles.brand}>TASKSPACE AI</Text><Text style={styles.intakeTitle}>从意图开始，跨 App 完成</Text><Text style={styles.intakeSubtitle}>AI 会理解目标与当前上下文，提出可审阅计划，补齐决定，再通过已注册能力执行并留下回执。</Text>
     <View style={styles.entryTabs}>
       <Pressable accessibilityRole="tab" accessibilityState={{ selected: !contextMode }} onPress={() => { setSourceKind('direct-input'); setGoalText(''); }} style={[styles.entryTab, !contextMode && styles.entryTabSelected]}><Text style={[styles.entryTabText, !contextMode && styles.entryTabTextSelected]}>直接说目标</Text></Pressable>
@@ -738,7 +942,7 @@ function IntakeScreen({ sourceText, setSourceText, goalText, setGoalText, source
     {notice ? <Text accessibilityRole="alert" style={styles.notice}>{notice}</Text> : null}
     <Pressable disabled={busy} onPress={analyzeGoal} style={({ pressed }) => [styles.primary, pressed && styles.pressed, busy && styles.disabled]}>{busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryLabel}>理解意图并生成计划</Text>}</Pressable>
     {sourceKind === 'email' ? <Pressable disabled={busy} onPress={analyzeInvitation} style={({ pressed }) => [styles.secondary, pressed && styles.pressed, busy && styles.disabled]}><Text style={styles.secondaryLabel}>使用面试邀请 Reference 解析器</Text></Pressable> : null}
-    <Text style={styles.privacyHint}>不会在手机中保存 API Key。原始内容仅发送到你配置的 Taskspace API。</Text>
+    <Text style={styles.privacyHint}>{Platform.OS === 'web' ? '未配置 API 时使用确定性 QA fixture，不会把输入发送到 AI。浏览器持久化只验证任务恢复，不验证 SecureStore。' : '不会在手机中保存 API Key。原始内容仅发送到你配置的 Taskspace API。'}</Text>
     {deleteAccount ? <Pressable disabled={busy} onPress={deleteAccount}><Text style={styles.deleteAccountStandalone}>永久删除账户与数据</Text></Pressable> : null}
   </ScrollView></KeyboardAvoidingView></SafeAreaView>;
 }
@@ -755,14 +959,34 @@ function capabilityLabel(capabilityId: string) {
     'system.calendar.createEvent': 'Calendar',
     'maps.route.estimate': '路线估算',
     'system.reminder.schedule': '提醒',
+    'taskspace.notes.create': 'Taskspace 笔记',
+    'taskspace.messaging.createDraft': '消息草稿',
+    'taskspace.preferences.set': '明确偏好',
+    'files.document.read': '文件读取',
+    'files.document.create': '文件创建',
   } as Record<string, string>)[capabilityId] ?? capabilityId;
 }
 
 function capabilityReality(capabilityId: string) {
+  if (Platform.OS === 'web') return ({
+    'system.calendar.createEvent': '浏览器模拟 · 需要之后 iPhone Calendar 真机验证',
+    'maps.route.estimate': '浏览器模拟 · 需要之后真实 Routes 服务验证',
+    'system.reminder.schedule': '浏览器模拟 · 需要之后 iPhone Notifications 真机验证',
+    'taskspace.notes.create': '真实保存到 Browser Test Mode 本地存储',
+    'taskspace.messaging.createDraft': '真实保存草稿 · 不会发送',
+    'taskspace.preferences.set': '真实保存用户明确偏好 · 不做隐式学习',
+    'files.document.read': '真实读取用户在浏览器中选择的文件',
+    'files.document.create': '真实生成并下载浏览器文件',
+  } as Record<string, string>)[capabilityId] ?? '浏览器模拟 capability';
   return ({
     'system.calendar.createEvent': '真实写入设备 Calendar',
     'maps.route.estimate': '真实调用 Routes API',
     'system.reminder.schedule': '真实创建本地通知',
+    'taskspace.notes.create': '真实保存到 Taskspace 加密本地存储',
+    'taskspace.messaging.createDraft': '真实保存 Taskspace 草稿 · 不会发送',
+    'taskspace.preferences.set': '真实保存用户明确偏好',
+    'files.document.read': '使用系统文件选择器读取真实文件 · 仍需 iPhone 真机验证',
+    'files.document.create': '创建真实文件并打开系统分享面板 · 仍需 iPhone 真机验证',
   } as Record<string, string>)[capabilityId] ?? '已注册 capability';
 }
 
@@ -810,6 +1034,7 @@ function PlanRow({ label, value, detail, selected, onPress }: { label: string; v
 const styles = StyleSheet.create({
   flex: { flex: 1 }, screen: { flex: 1, backgroundColor: '#f4f5f8' }, center: { alignItems: 'center', justifyContent: 'center' },
   intakeContent: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 52, paddingBottom: 30 }, brand: { color: '#1266fa', fontSize: 12, fontWeight: '800', letterSpacing: 1.4 },
+  browserBanner: { marginHorizontal: 16, marginTop: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: '#e5ae57', backgroundColor: '#fff4dc' }, browserBannerTitle: { color: '#6d4606', fontSize: 11, fontWeight: '800', letterSpacing: 0.6 }, browserBannerText: { marginTop: 3, color: '#76571f', fontSize: 11, lineHeight: 16 },
   authContent: { flex: 1, paddingHorizontal: 24, paddingTop: 72 }, authInput: { minHeight: 58, marginTop: 16, paddingHorizontal: 18, borderRadius: 18, backgroundColor: '#e5e8ee', color: '#171a20', fontSize: 16 },
   intakeTitle: { marginTop: 18, maxWidth: 340, color: '#111318', fontSize: 34, lineHeight: 40, fontWeight: '700' }, intakeSubtitle: { marginTop: 12, color: '#626974', fontSize: 16, lineHeight: 24 },
   entryTabs: { marginTop: 24, padding: 4, borderRadius: 18, backgroundColor: '#e5e8ee', flexDirection: 'row' }, entryTab: { flex: 1, minHeight: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }, entryTabSelected: { backgroundColor: '#fff' }, entryTabText: { color: '#747b86', fontSize: 14, fontWeight: '600' }, entryTabTextSelected: { color: '#171a20' },

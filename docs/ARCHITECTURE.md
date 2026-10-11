@@ -1,7 +1,7 @@
 # Cross-platform MVP Architecture
 
 Status: Architecture decision baseline  
-Updated: 2026-09-19
+Updated: 2026-09-20
 
 ## Decision
 
@@ -107,6 +107,12 @@ The first executable contract now lives in `src/capabilities/`: a registry rejec
 
 The mobile cache uses an append-and-replay task record with bounded compaction, plus a separate task-scoped draft. For authenticated tasks, the server snapshot and append-only event table are canonical; launch restores the newest server task first and uses the account-scoped device cache only as an explicit offline fallback. Session credentials are isolated in iOS Keychain / Android Keystore-backed SecureStore and never written to AsyncStorage. Cache corruption is surfaced explicitly instead of silently discarding user work.
 
+### Explicit preference context
+
+Personalization begins with preferences that the user explicitly asks the product to remember. The existing `taskspace.preferences.set` capability stores those records in the encrypted device-local capability artifact store. Before a later planning request, the app projects at most the 12 most recent records into a length-bounded `Taskspace Personal Context` item containing only `key`, `value`, and optional `category` fields. The minimized snapshot becomes ordinary immutable task context, so decisions and replans retain the same evidence without introducing a second planner or state machine.
+
+The planner may use that context only when relevant and must not turn a preference into an action by itself. Review labels it as reference context rather than claiming it was applied. Task IDs, attempt/idempotency metadata, timestamps, and inferred behavior are never included. Candidate preferences, behavioral learning, cross-account synchronization, and automatic inference are intentionally out of scope for this milestone.
+
 ## Capability execution contract
 
 1. Planner proposes an action using a registered action ID and validated arguments.
@@ -135,6 +141,14 @@ Before enabling that mode, the architecture requires:
 - recovery that never blindly repeats an ambiguous purchase, send, delete, booking, or account action.
 
 High-impact actions—including purchase, payment, send/post, delete, and booking modification—remain explicit-approval actions even when a structured provider exists.
+
+The first minimal implementation uses the existing `confirmation: always` policy. After plan confirmation, execution pauses immediately before the eligible action. Approval is persisted on that step with the current revision, capability ID, and resolved arguments; the executor compares all three before dispatch. A new revision replaces the steps and therefore invalidates the approval automatically. Refusal clears the plan confirmation and returns the same task to editable Review. `taskspace.messaging.approvalDemo` is a non-sending reference adapter used only to test this topology; its receipt explicitly states that no message was sent.
+
+### Time-trigger continuation
+
+The first background-style topology is a one-shot `time` trigger with a server-validated ISO `runAt`. Confirmation persists the immutable plan and moves the task to `waiting` instead of dispatching capabilities. The active client observes the real clock; when due it records `trigger.fired` and resumes the same executor. A restored waiting task re-establishes the timer from persisted trigger data. This is not a durable cloud scheduler yet: if every client is offline at the due instant, execution resumes when the app next restores the task. Event and external-condition triggers remain unavailable rather than simulated.
+
+Time triggers may now carry one minimal recurrence rule (`minute`, `daily`, or `weekly`, plus a bounded interval). Each completed or failed run archives its outcome and available receipts, clears per-run step state, advances to the next future instant, and returns the same confirmed task to `waiting`. One failed occurrence therefore remains visible without terminating the recurring rule. Missed intervals are skipped rather than replayed in a burst. History is bounded to the 20 most recent occurrences. `minute` exists for explicit short QA; ordinary plans should use daily or weekly. High-impact steps still require a new per-attempt approval on every occurrence.
 
 ## Initial capability IDs
 

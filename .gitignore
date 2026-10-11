@@ -1,5 +1,7 @@
 .env
 .env.local
+.env.*
+!.env.example
 .vercel
 node_modules/
 dist/
@@ -21,3 +23,8 @@ research/transcribe_user4.py
 
 # Office lock files
 ~$*
+
+.vercel
+
+# Private local screenshot; contains a real conversation and must not enter the public repo.
+/file.png

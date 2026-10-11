@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-09-20 — Recurring task topology
+
+- Extended validated time triggers with a minimal minute/daily/weekly recurrence rule; minute cadence is reserved for explicit short tests.
+- A completed or failed run now archives its outcome and available receipts as a bounded occurrence, resets the confirmed steps, calculates the next future run, and returns the same task to waiting.
+- Added next-run, completed-run, and recent occurrence-result presentation plus stop behavior that preserves history.
+- Verified Live Gemini → recurring Review → Confirmation → three real clock-driven local-note occurrences → Stop, including a runtime fix ensuring a changed next-run time rebuilds the timer.
+
+## 2026-09-20 — Persistent time-trigger topology
+
+- Added a validated one-shot `time` trigger using an exact ISO `runAt`; unsupported event/condition triggers remain unavailable rather than being simulated.
+- Confirmed future tasks now enter a persisted waiting state and resume the same immutable plan only after the real device/browser clock reaches the condition.
+- Added Review and Task Activity treatments for trigger visibility, waiting, stop, automatic continuation, and final receipts.
+- Verified Live Gemini → Review → Confirmation → waiting → real clock fire → local note execution → Receipt without manually advancing the task.
+
+## 2026-09-20 — Per-attempt approval topology
+
+- Turned the existing fail-closed `confirmation: always` boundary into a minimal persisted approval flow for high-impact steps.
+- Bound each approval to the current task revision, capability ID, and resolved action arguments; replanning or changing arguments invalidates it.
+- Added a consequence-first approval surface with approve, decline-to-edit, and stop paths using the existing presentation system.
+- Added `taskspace.messaging.approvalDemo`, a deliberately non-sending reference capability that proves the topology without representing a real external side effect as successful.
+- Verified Live Gemini proposal → Review → plan confirmation → per-attempt approval/refusal → safe receipt in Browser Test Mode.
+
+## 2026-09-20 — Explicit personal context topology
+
+- Connected the existing encrypted explicit-preference store to subsequent live Gemini planning through a bounded, minimized `Taskspace Personal Context` snapshot.
+- Kept preference memory opt-in and declarative: only user-confirmed key/value/category fields are projected; task IDs, attempt metadata, timestamps, and inferred behavior are excluded.
+- Added user-visible Review semantics for both saving a preference and seeing which confirmed preferences were supplied as planning context.
+- Verified one complete cross-task flow: save a Markdown preference, create a new summary-file task, receive a Gemini proposal for `summary.md`, confirm it, and receive the real Browser Files receipt.
+
+## 2026-09-20 — Real browser Files capability
+
+- Added generic `files.document.read` and `files.document.create` capability contracts to the server-owned catalog without adding a file-specific workflow.
+- Browser Test Mode now reads a real user-selected text file and creates a real Blob-backed document with a download/save action; results are explicitly separated from simulated native capabilities.
+- Added Expo Document Picker, FileSystem, and Sharing adapters for the future iPhone path, while keeping that path marked as pending physical-device verification.
+- Changed file receipts to result-first presentation: file name, MIME type, size, preview, and download/open action precede execution metadata.
+- Verified the live Gemini flow through `/api/orchestrate` for file read, file create, and read-to-create receipt binding.
+
+## 2026-09-19 — Windows browser test shell
+
+- Added an Expo Web launch path that reuses the production task model, reducer, plan compiler, confirmation, executor, receipts, and recovery.
+- Isolated browser differences behind platform-specific storage and capability adapters; browser receipts explicitly identify simulated Calendar, route, and notification effects.
+- Added a deterministic no-key QA fixture for Decision → Replan testing without introducing a second task state machine or executor.
+- Marked Calendar, Notifications, SecureStore, App Intents, and Sharesheet as pending iPhone validation.
+
 ## 2026-09-19 — Operable intent-to-receipt experience
 
 - Split native intake into direct-intent and current-context entry modes without changing the orchestration kernel.

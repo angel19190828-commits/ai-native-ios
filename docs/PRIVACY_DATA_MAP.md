@@ -1,7 +1,7 @@
 # Privacy and Data Map
 
 Status: MVP working baseline  
-Updated: 2026-09-19
+Updated: 2026-09-20
 
 ## Data classes
 
@@ -14,6 +14,7 @@ Updated: 2026-09-19
 | Capability input | Execute a confirmed step | Minimum necessary executor payload | Never grant the model direct credentials or native API access |
 | Execution receipt and external ID | Recovery, support, and user-visible proof | Task event history | Retain without provider secrets; user can delete task history |
 | Model prompt/response | Extraction and planning | Backend transient processing and redacted diagnostics | Minimize context; configurable retention; never train without explicit opt-in |
+| Explicit user preferences | Reuse facts the user explicitly asked the product to remember | Encrypted device-local capability artifact store; minimized key/value/category snapshot in relevant task context and Gemini planning request | No inferred behavior; bound snapshot size; expose and delete controls before external beta |
 | Crash/performance telemetry | Reliability | Monitoring provider when configured | Remove content, addresses, tokens, and free-form text before transmission |
 
 ## Permission principles

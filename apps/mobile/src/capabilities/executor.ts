@@ -82,8 +82,13 @@ export async function executeNextStep(
   if (adapter.descriptor.interactionMode === 'ui_automation') {
     throw new Error(`UI automation capability execution is not enabled: ${step.capabilityId}`);
   }
-  if (adapter.descriptor.confirmation === 'always') {
-    throw new Error(`Capability requires per-attempt confirmation: ${step.capabilityId}`);
+  const approvedInput = adapter.descriptor.confirmation === 'always' ? resolveStepInput(step, task) : undefined;
+  if (adapter.descriptor.confirmation === 'always'
+    && (!step.approval
+      || step.approval.revision !== task.revision
+      || step.approval.capabilityId !== step.capabilityId
+      || JSON.stringify(step.approval.input) !== JSON.stringify(approvedInput))) {
+    throw new Error(`Capability requires current per-attempt confirmation: ${step.capabilityId}`);
   }
 
   const controller = new AbortController();
@@ -105,7 +110,7 @@ export async function executeNextStep(
     await options.onEvent?.(running);
     let result;
     try {
-      result = await adapter.execute(resolveStepInput(step, task), {
+      result = await adapter.execute(approvedInput ?? resolveStepInput(step, task), {
         userId: options.userId,
         deviceId: options.deviceId,
         taskId: task.id,
